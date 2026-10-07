@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp Schedule Bot</title>
+<style>
+  :root { --bg:#0b0d0e; --card:#151819; --line:#232829; --text:#e9edef; --muted:#8696a0; --green:#25d366; --yellow:#f5c542; --red:#ef5350; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:radial-gradient(circle at 50% -10%, #12261b 0%, var(--bg) 55%); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; display:flex; justify-content:center; padding:24px 16px; }
+  main { width:100%; max-width:440px; animation:fade .6s ease; }
+  @keyframes fade { from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:none} }
+  h1 { font-size:1.4rem; margin:8px 0 16px; display:flex; align-items:center; gap:10px; }
+  h1 span { color:var(--green); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:20px; margin-bottom:14px; }
+  .status { display:flex; align-items:center; gap:10px; font-weight:600; }
+  .dot { width:12px; height:12px; border-radius:50%; background:var(--yellow); box-shadow:0 0 0 0 rgba(245,197,66,.6); animation:pulse 1.8s infinite; }
+  .dot.ready { background:var(--green); --c:37,211,102; }
+  .dot.bad { background:var(--red); }
+  @keyframes pulse { 70%{box-shadow:0 0 0 10px rgba(245,197,66,0)} 100%{box-shadow:0 0 0 0 rgba(245,197,66,0)} }
+  .dot.ready { animation:none; box-shadow:0 0 12px var(--green); }
+  .qr { display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center; }
+  .qr-box { background:#fff; padding:14px; border-radius:16px; width:100%; max-width:320px; aspect-ratio:1; display:flex; align-items:center; justify-content:center; animation:fade .4s ease; }
+  .qr-box img { width:100%; height:100%; display:block; }
+  .spinner { width:42px; height:42px; border:4px solid #ddd; border-top-color:var(--green); border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .hint { color:var(--muted); font-size:.9rem; line-height:1.5; }
+  .ok { text-align:center; padding:12px 0; animation:fade .5s ease; }
+  .ok .big { font-size:3rem; }
+  .ok h2 { margin:8px 0 4px; color:var(--green); font-size:1.2rem; }
+  .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .stat { background:#101314; border:1px solid var(--line); border-radius:14px; padding:12px; text-align:center; }
+  .stat small { display:block; color:var(--muted); font-size:.72rem; margin-bottom:6px; }
+  .stat b { font-size:.95rem; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>💬 <span>WhatsApp</span> Schedule Bot</h1>
+
+  <div class="card"><div class="status"><div id="dot" class="dot"></div><div id="statusText">Подключение...</div></div></div>
+
+  <div id="qrCard" class="card qr">
+    <div id="qrBox" class="qr-box"><div class="spinner"></div></div>
+    <div class="hint">Откройте WhatsApp на телефоне → <b>Связанные устройства</b> → <b>Привязка устройства</b> и наведите камеру на QR-код.</div>
+  </div>
+
+  <div id="okCard" class="card ok hidden">
+    <div class="big">✅</div>
+    <h2>WhatsApp подключён</h2>
+    <div class="hint">Аккаунт успешно авторизован.</div>
+  </div>
+
+  <div class="card grid">
+    <div class="stat"><small>Состояние</small><b id="online">🔴 Offline</b></div>
+    <div class="stat"><small>Команды</small><b id="cmds">8</b></div>
+    <div class="stat"><small>Расписание</small><b id="cls">9-В</b></div>
+  </div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  function render(s) {
+    const ready = s.status === 'ready';
+    $('dot').className = 'dot' + (ready ? ' ready' : (s.status === 'disconnected' || s.status === 'auth_failure') ? ' bad' : '');
+    $('statusText').textContent =
+      ready ? '🟢 Подключён' :
+      s.status === 'qr' ? '🟡 Ожидание QR-кода' :
+      (s.status === 'disconnected' || s.status === 'auth_failure') ? '🔴 Отключён' :
+      '🟡 ' + (s.message || 'Запуск...');
+    $('qrCard').classList.toggle('hidden', ready);
+    $('okCard').classList.toggle('hidden', !ready);
+    if (s.code) {
+      $('qrBox').innerHTML = '<div style="color:#111;font:700 2rem monospace;letter-spacing:.15em">' + s.code + '</div>';
+    } else if (s.qr) {
+      if (!$('qrBox').querySelector('img') || $('qrBox').querySelector('img').src !== s.qr)
+        $('qrBox').innerHTML = '<img alt="QR" src="' + s.qr + '">';
+    } else if (!ready) {
+      $('qrBox').innerHTML = '<div class="spinner"></div>';
+    }
+    $('online').textContent = ready ? '🟢 Online' : '🔴 Offline';
+    $('cmds').textContent = s.commands;
+    $('cls').textContent = s.className;
+  }
+  function connect() {
+    const es = new EventSource('/events');
+    es.onmessage = (e) => render(JSON.parse(e.data));
+    es.onerror = () => { es.close(); $('statusText').textContent = '🔴 Нет связи с сервером'; setTimeout(connect, 3000); };
+  }
+  connect();
+</script>
+</body>
+</html>
