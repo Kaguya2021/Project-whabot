@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 const { default: makeWASocket, DisconnectReason, delay } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const readline = require('readline');
@@ -6,21 +7,29 @@ const config = require('./src/config');
 const { createPostgresAuth } = require('./src/postgresAuth');
 const { handleIncomingMessage } = require('./src/bot');
 
+// HTTP-сервер для статуса "Live" на Render
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('WhatsApp Bot is Live!');
+}).listen(PORT, () => {
+    console.log(`[INFO] HTTP-сервер запущен на порту ${PORT}`);
+});
+
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const question = (text) => new Promise((resolve) => rl.question(text, resolve));
 
 async function startBot() {
-    console.log('[INFO] Запуск бота...');
+    console.log('[INFO] Запуск WhatsApp бота...');
 
     if (!config.databaseUrl) {
-        console.error('[ERROR] DATABASE_URL не задан в переменных окружения или .env!');
+        console.error('[ERROR] DATABASE_URL не задан!');
         process.exit(1);
     }
 
     const usePostgresAuthState = createPostgresAuth(config.databaseUrl);
     const { state, saveCreds } = await usePostgresAuthState();
 
-    console.log('[INFO] Инициализация WhatsApp...');
     const sock = makeWASocket({
         auth: state,
         printQRInTerminal: false,
@@ -42,7 +51,7 @@ async function startBot() {
         try {
             const code = await sock.requestPairingCode(phoneNumber);
             console.log(`\n=================================`);
-            console.log(`ВАШ КОД ПРИВЯЗКИ: ${code}`);
+            console.log(`КОД ПРИВЯЗКИ: ${code}`);
             console.log(`=================================\n`);
         } catch (err) {
             console.error('[ERROR] Ошибка получения кода:', err);
@@ -55,13 +64,9 @@ async function startBot() {
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            console.log(`[INFO] Соединение закрыто. Переподключение: ${shouldReconnect}`);
-            if (shouldReconnect) {
-                startBot();
-            }
+            if (shouldReconnect) startBot();
         } else if (connection === 'open') {
-            console.log('[INFO] WhatsApp подключён!');
-            console.log('[INFO] Сессия сохранена в Neon PostgreSQL.');
+            console.log('[INFO] WhatsApp успешно подключён!');
             rl.close();
         }
     });
@@ -78,13 +83,11 @@ async function startBot() {
             const replyText = handleIncomingMessage(text);
 
             if (replyText) {
-                console.log(`[COMMAND] Обработка запроса в чате ${msg.key.remoteJid}`);
                 await sock.sendMessage(
                     msg.key.remoteJid,
                     { text: replyText },
                     { quoted: msg }
                 );
-                console.log(`[RESPONSE] Ответ успешно отправлен`);
             }
         }
     });
