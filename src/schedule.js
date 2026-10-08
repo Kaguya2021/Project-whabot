@@ -31,24 +31,26 @@ function formatDaySchedule(dayKey) {
 
     if (!lessons) return null;
 
-    let response = `РАСПИСАНИЕ\n${dayTitle}\n${config.schoolName}\n${config.className}\n\n`;
+    let response = `📚 РАСПИСАНИЕ\n${dayTitle}\n\n`;
 
     lessons.forEach((lesson, index) => {
         const time = timeSlots[index] || '';
         response += `${index + 1}. ${lesson} (${time})\n`;
     });
 
-    return response.trim();
+    response += `\n────────────────`;
+
+    return response;
 }
 
 function getFullScheduleMenu() {
-    return `Расписание ${config.className}\n${config.schoolName}\n\n` +
+    return `📚 Расписание 9-В класса\n\n` +
            `Понедельник\n` +
            `Вторник\n` +
            `Среда\n` +
            `Четверг\n` +
            `Пятница\n\n` +
-           `Для просмотра напишите команду: /понедельник, /вторник и т.д.`;
+           `Для просмотра отправьте команду: /понедельник, /вторник и т.д.`;
 }
 
 module.exports = {
