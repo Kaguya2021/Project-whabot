@@ -1,59 +1,101 @@
 const config = require('./config');
 
-const timeSlots = [
-    '07:30 - 08:15',
-    '08:20 - 09:05',
-    '09:10 - 09:55',
-    '10:05 - 10:50',
-    '10:55 - 11:40',
-    '11:45 - 12:30'
-];
-
+// Расписание по дням недели с указанием времени уроков
 const scheduleData = {
-    monday: ['К-тил', 'Технол', 'Хим', 'Дин тарых', 'Алгебр', 'К-адаб'],
-    tuesday: ['Ч-тил', 'Д-тарбия', 'Биолог', 'Тарых', 'Геомет', 'Алгебра'],
-    wednesday: ['Геогр', 'Физика', 'К-адаб', 'Инф-ка', 'А.ж.к', 'О-адаб'],
-    thursday: ['Физика', 'Биолог', 'К-адаб', 'О-адаб', 'Геогр', 'Тарых'],
-    friday: ['Алгебра', 'Д-тарбия', 'К-тил', 'Ч-тил', 'О-тил', 'Хим']
-};
-
-const dayNames = {
-    monday: 'Понедельник',
-    tuesday: 'Вторник',
-    wednesday: 'Среда',
-    thursday: 'Четверг',
-    friday: 'Пятница'
+    monday: {
+        name: 'Понедельник',
+        lessons: [
+            { timeStart: '07:30', timeEnd: '08:15', subject: 'Алгебра' },
+            { timeStart: '08:20', timeEnd: '09:05', subject: 'Геометрия' },
+            { timeStart: '09:15', timeEnd: '10:00', subject: 'Физика' },
+            { timeStart: '10:10', timeEnd: '10:55', subject: 'История' }
+        ]
+    },
+    tuesday: {
+        name: 'Вторник',
+        lessons: [
+            { timeStart: '07:30', timeEnd: '08:15', subject: 'Химия' },
+            { timeStart: '08:20', timeEnd: '09:05', subject: 'Биология' },
+            { timeStart: '09:15', timeEnd: '10:00', subject: 'Английский язык' },
+            { timeStart: '10:10', timeEnd: '10:55', subject: 'Литература' }
+        ]
+    },
+    wednesday: {
+        name: 'Среда',
+        lessons: [
+            { timeStart: '07:30', timeEnd: '08:15', subject: 'Алгебра' },
+            { timeStart: '08:20', timeEnd: '09:05', subject: 'Информатика' },
+            { timeStart: '09:15', timeEnd: '10:00', subject: 'География' },
+            { timeStart: '10:10', timeEnd: '10:55', subject: 'Физика' }
+        ]
+    },
+    thursday: {
+        name: 'Четверг',
+        lessons: [
+            { timeStart: '07:30', timeEnd: '08:15', subject: 'История' },
+            { timeStart: '08:20', timeEnd: '09:05', subject: 'Алгебра' },
+            { timeStart: '09:15', timeEnd: '10:00', subject: 'Английский язык' },
+            { timeStart: '10:10', timeEnd: '10:55', subject: 'Физкультура' }
+        ]
+    },
+    friday: {
+        name: 'Пятница',
+        lessons: [
+            { timeStart: '07:30', timeEnd: '08:15', subject: 'Биология' },
+            { timeStart: '08:20', timeEnd: '09:05', subject: 'Химия' },
+            { timeStart: '09:15', timeEnd: '10:00', subject: 'Литература' },
+            { timeStart: '10:10', timeEnd: '10:55', subject: 'Классный час' }
+        ]
+    }
 };
 
 function formatDaySchedule(dayKey) {
-    const dayTitle = dayNames[dayKey];
-    const lessons = scheduleData[dayKey];
+    const day = scheduleData[dayKey];
+    if (!day) return 'Расписание не найдено.';
 
-    if (!lessons) return null;
-
-    let response = `📚 РАСПИСАНИЕ\n${dayTitle}\n\n`;
-
-    lessons.forEach((lesson, index) => {
-        const time = timeSlots[index] || '';
-        response += `${index + 1}. ${lesson} (${time})\n`;
+    let text = `📅 Расписание: ${day.name} (${config.schoolName}, ${config.className})\n\n`;
+    day.lessons.forEach((l, index) => {
+        text += `${index + 1}. ${l.timeStart} - ${l.timeEnd} | *${l.subject}*\n`;
     });
-
-    response += `\n────────────────`;
-
-    return response;
+    return text.trim();
 }
 
 function getFullScheduleMenu() {
-    return `📚 Расписание 9-В класса\n\n` +
-           `Понедельник\n` +
-           `Вторник\n` +
-           `Среда\n` +
-           `Четверг\n` +
-           `Пятница\n\n` +
-           `Для просмотра отправьте команду: /понедельник, /вторник и т.д.`;
+    return `📋 Меню расписания 9-В:\n\n` +
+           `/понедельник\n/вторник\n/среда\n/четверг\n/пятница`;
+}
+
+// Получить текущий день недели (UTC+6 Кыргызстан)
+function getCurrentDayKey() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const kgDate = new Date(utc + (3600000 * 6));
+    const dayIndex = kgDate.getDay();
+
+    const daysMap = {
+        1: 'monday',
+        2: 'tuesday',
+        3: 'wednesday',
+        4: 'thursday',
+        5: 'friday'
+    };
+    return daysMap[dayIndex] || null;
+}
+
+// Получить время HH:MM по Кыргызстану
+function getCurrentTimeString() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const kgDate = new Date(utc + (3600000 * 6));
+    const hours = String(kgDate.getHours()).padStart(2, '0');
+    const minutes = String(kgDate.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
 }
 
 module.exports = {
+    scheduleData,
     formatDaySchedule,
-    getFullScheduleMenu
+    getFullScheduleMenu,
+    getCurrentDayKey,
+    getCurrentTimeString
 };
