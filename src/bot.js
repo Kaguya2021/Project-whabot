@@ -65,7 +65,7 @@ function handleIncomingMessage(text) {
                    `/создатель — информация об авторе\n` +
                    `/помощь — список команд`;
 
-        // Секретные команды (нет в /помощь)
+        // Секретные команды и панель управления (скрыты из /помощь)
         case '/panel':
             return `🎛️ Секретная панель управления:\n\n` +
                    `/понедельник\n/вторник\n/среда\n/четверг\n/пятница\n` +
@@ -88,7 +88,7 @@ function handleIncomingMessage(text) {
             return getRandomBaranFact();
 
         default:
-            return null; // Неизвестные команды игнорируются в группах
+            return null;
     }
 }
 
