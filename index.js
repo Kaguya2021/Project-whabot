@@ -6,7 +6,8 @@ const readline = require('readline');
 const config = require('./src/config');
 const { createPostgresAuth } = require('./src/postgresAuth');
 const { handleIncomingMessage } = require('./src/bot');
-const { scheduleData, getCurrentDayKey, getCurrentTimeString } = require('./src/schedule');
+const { scheduleData, getCurrentDayKey, getCurrentTimeString, getCurrentDateString } = require('./src/schedule');
+const { checkBirthdayByDate } = require('./src/people');
 
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
@@ -86,46 +87,49 @@ async function startBot() {
             }
         });
 
-        // Автоматическая отправка уведомлений в ЛС
-        let lastSentDay = '';
+        // Функция отправки сообщений во ВСЕ активные группы, куда писал бот
+        const activeGroups = new Set();
+
+        async function broadcastToGroups(text) {
+            for (const jid of activeGroups) {
+                try {
+                    await sock.sendMessage(jid, { text });
+                } catch (err) {
+                    console.error(`[ERROR] Не удалось отправить в группу ${jid}:`, err);
+                }
+            }
+        }
+
         let notifiedLessons = new Set();
         let endOfDayNotified = false;
+        let birthdayCheckedDate = '';
 
         setInterval(async () => {
             if (!sock.authState.creds.registered) return;
 
-            const timeStr = getCurrentTimeString();
+            const timeStr = getCurrentTimeString(); // "HH:MM"
+            const dateStr = getCurrentDateString(); // "DD.MM"
             const dayKey = getCurrentDayKey();
-            const ownerPhone = config.pairPhone ? config.pairPhone.replace(/[^0-9]/g, '') + '@s.whatsapp.net' : null;
 
-            if (!ownerPhone) return;
-
-            // 1. Авто-рассылка расписания на день строго в 06:00
-            if (timeStr === '06:00' && lastSentDay !== dayKey && dayKey) {
-                lastSentDay = dayKey;
-                const daySchedule = scheduleData[dayKey];
-                if (daySchedule) {
-                    let msgText = `🌅 Доброе утро, госпожа Кагуя!\nРасписание на сегодня (${daySchedule.name}):\n\n`;
-                    daySchedule.lessons.forEach((l, index) => {
-                        msgText += `${index + 1}. ${l.timeStart} - ${l.timeEnd} | *${l.subject}*\n`;
-                    });
-                    try {
-                        await sock.sendMessage(ownerPhone, { text: msgText });
-                        console.log('[INFO] Утренняя рассылка отправлена.');
-                    } catch (err) {
-                        console.error('[ERROR] Ошибка рассылки:', err);
+            // 1. Проверка Дня Рождения ровно в 00:00
+            if (timeStr === '00:00' && birthdayCheckedDate !== dateStr) {
+                birthdayCheckedDate = dateStr;
+                const birthdayPersons = checkBirthdayByDate(dateStr);
+                if (birthdayPersons.length > 0) {
+                    for (const person of birthdayPersons) {
+                        const bdayText = `${person.name}, с днём рождения! Желаю море позитива, океан любви и целую вселенную счастья. Пусть всё задуманное обязательно сбудется!\n\nРебята давайте всем вместе поздравив ${person.name}`;
+                        await broadcastToGroups(bdayText);
                     }
                 }
             }
 
-            // Сброс флагов в 00:00
+            // Сброс флагов уроков в полночь
             if (timeStr === '00:00') {
                 notifiedLessons.clear();
-                lastSentDay = '';
                 endOfDayNotified = false;
             }
 
-            // 2. Уведомления об уроках
+            // 2. Уведомления об уроках и завершении в 12:30 (только в группы)
             if (dayKey && scheduleData[dayKey]) {
                 const lessons = scheduleData[dayKey].lessons;
                 for (const lesson of lessons) {
@@ -134,26 +138,21 @@ async function startBot() {
 
                     if (timeStr === lesson.timeStart && !notifiedLessons.has(startKey)) {
                         notifiedLessons.add(startKey);
-                        const text = `🔔 Урок *${lesson.subject}* начинается прямо сейчас (${lesson.timeStart})!`;
-                        await sock.sendMessage(ownerPhone, { text }).catch(() => {});
+                        await broadcastToGroups(`🔔 Урок *${lesson.subject}* начинается прямо сейчас (${lesson.timeStart})!`);
                     }
 
                     if (timeStr === lesson.timeEnd && !notifiedLessons.has(endKey)) {
                         notifiedLessons.add(endKey);
-                        const text = `🏁 Урок *${lesson.subject}* окончен (${lesson.timeEnd}). Переменка!`;
-                        await sock.sendMessage(ownerPhone, { text }).catch(() => {});
+                        await broadcastToGroups(`🏁 Урок *${lesson.subject}* окончен (${lesson.timeEnd}). Переменка!`);
                     }
                 }
 
-                // 3. Сообщение о завершении уроков строго в 12:30
                 if (timeStr === '12:30' && !endOfDayNotified) {
                     endOfDayNotified = true;
-                    const endText = `🎉 Уроки закончены! Ты пока жива, и это главное :) Удачи и отличного отдыха!`;
-                    await sock.sendMessage(ownerPhone, { text: endText }).catch(() => {});
-                    console.log('[INFO] Отправлено финальное сообщение в 12:30.');
+                    await broadcastToGroups(`🎉 Уроки закончены! Ты пока жива, и это главное :) Удачи и отличного отдыха!`);
                 }
             }
-        }, 30000);
+        }, 15000); // Проверка каждые 15 секунд для максимальной точности по минутам
 
         sock.ev.on('messages.upsert', async (m) => {
             if (m.type !== 'notify') return;
@@ -161,14 +160,20 @@ async function startBot() {
             for (const msg of m.messages) {
                 if (!msg.message || msg.key.fromMe) continue;
 
+                const remoteJid = msg.key.remoteJid;
+                // Запоминаем только группы (jid заканчивается на @g.us)
+                if (remoteJid && remoteJid.endsWith('@g.us')) {
+                    activeGroups.add(remoteJid);
+                }
+
                 const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
                 if (!text) continue;
 
                 const replyText = handleIncomingMessage(text);
 
-                if (replyText) {
+                if (replyText && remoteJid && remoteJid.endsWith('@g.us')) {
                     await sock.sendMessage(
-                        msg.key.remoteJid,
+                        remoteJid,
                         { text: replyText },
                         { quoted: msg }
                     );
