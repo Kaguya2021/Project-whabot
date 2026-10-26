@@ -87,7 +87,7 @@ async function startBot() {
             }
         });
 
-        // Функция отправки сообщений во ВСЕ активные группы, куда писал бот
+        // Коллекция только для групповых чатов (@g.us)
         const activeGroups = new Set();
 
         async function broadcastToGroups(text) {
@@ -104,14 +104,15 @@ async function startBot() {
         let endOfDayNotified = false;
         let birthdayCheckedDate = '';
 
+        // Автоматика работает строго для групп
         setInterval(async () => {
             if (!sock.authState.creds.registered) return;
 
-            const timeStr = getCurrentTimeString(); // "HH:MM"
-            const dateStr = getCurrentDateString(); // "DD.MM"
+            const timeStr = getCurrentTimeString();
+            const dateStr = getCurrentDateString();
             const dayKey = getCurrentDayKey();
 
-            // 1. Проверка Дня Рождения ровно в 00:00
+            // 1. Дни рождения ровно в 00:00 (ТОЛЬКО В ГРУППЫ)
             if (timeStr === '00:00' && birthdayCheckedDate !== dateStr) {
                 birthdayCheckedDate = dateStr;
                 const birthdayPersons = checkBirthdayByDate(dateStr);
@@ -123,13 +124,12 @@ async function startBot() {
                 }
             }
 
-            // Сброс флагов уроков в полночь
             if (timeStr === '00:00') {
                 notifiedLessons.clear();
                 endOfDayNotified = false;
             }
 
-            // 2. Уведомления об уроках и завершении в 12:30 (только в группы)
+            // 2. Уведомления об уроках и 12:30 (ТОЛЬКО В ГРУППЫ)
             if (dayKey && scheduleData[dayKey]) {
                 const lessons = scheduleData[dayKey].lessons;
                 for (const lesson of lessons) {
@@ -152,8 +152,9 @@ async function startBot() {
                     await broadcastToGroups(`🎉 Уроки закончены! Ты пока жива, и это главное :) Удачи и отличного отдыха!`);
                 }
             }
-        }, 15000); // Проверка каждые 15 секунд для максимальной точности по минутам
+        }, 15000);
 
+        // Обработка входящих сообщений
         sock.ev.on('messages.upsert', async (m) => {
             if (m.type !== 'notify') return;
 
@@ -161,17 +162,21 @@ async function startBot() {
                 if (!msg.message || msg.key.fromMe) continue;
 
                 const remoteJid = msg.key.remoteJid;
-                // Запоминаем только группы (jid заканчивается на @g.us)
-                if (remoteJid && remoteJid.endsWith('@g.us')) {
+                if (!remoteJid) continue;
+
+                // Если это группа, сохраняем её для будущих авто-рассылок
+                if (remoteJid.endsWith('@g.us')) {
                     activeGroups.add(remoteJid);
                 }
 
                 const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
                 if (!text) continue;
 
+                // Обрабатываем команды
                 const replyText = handleIncomingMessage(text);
 
-                if (replyText && remoteJid && remoteJid.endsWith('@g.us')) {
+                if (replyText) {
+                    // Команды работают везде (и в ЛС, и в группах)
                     await sock.sendMessage(
                         remoteJid,
                         { text: replyText },
