@@ -87,15 +87,18 @@ async function startBot() {
             }
         });
 
-        // Коллекция только для групповых чатов (@g.us)
         const activeGroups = new Set();
 
-        async function broadcastToGroups(text) {
+        async function broadcastToGroups(texts) {
+            const messages = Array.isArray(texts) ? texts : [texts];
             for (const jid of activeGroups) {
-                try {
-                    await sock.sendMessage(jid, { text });
-                } catch (err) {
-                    console.error(`[ERROR] Не удалось отправить в группу ${jid}:`, err);
+                for (const text of messages) {
+                    try {
+                        await sock.sendMessage(jid, { text });
+                        await delay(1000); // небольшая пауза между сообщениями
+                    } catch (err) {
+                        console.error(`[ERROR] Не удалось отправить в группу ${jid}:`, err);
+                    }
                 }
             }
         }
@@ -104,7 +107,6 @@ async function startBot() {
         let endOfDayNotified = false;
         let birthdayCheckedDate = '';
 
-        // Автоматика работает строго для групп
         setInterval(async () => {
             if (!sock.authState.creds.registered) return;
 
@@ -112,14 +114,17 @@ async function startBot() {
             const dateStr = getCurrentDateString();
             const dayKey = getCurrentDayKey();
 
-            // 1. Дни рождения ровно в 00:00 (ТОЛЬКО В ГРУППЫ)
+            // Авто-поздравление с ДР в 00:00 (два сообщения в группы)
             if (timeStr === '00:00' && birthdayCheckedDate !== dateStr) {
                 birthdayCheckedDate = dateStr;
                 const birthdayPersons = checkBirthdayByDate(dateStr);
                 if (birthdayPersons.length > 0) {
                     for (const person of birthdayPersons) {
-                        const bdayText = `${person.name}, с днём рождения! Желаю море позитива, океан любви и целую вселенную счастья. Пусть всё задуманное обязательно сбудется!\n\nРебята давайте всем вместе поздравив ${person.name}`;
-                        await broadcastToGroups(bdayText);
+                        const msgs = [
+                            `🎉 ${person.name}, с днём рождения! Желаем море позитива, океан счастья и ярких моментов. Пусть всё задуманное обязательно сбудется! ✨`,
+                            `💬 Ребята, давайте все вместе поздравим ${person.dat}!)`
+                        ];
+                        await broadcastToGroups(msgs);
                     }
                 }
             }
@@ -129,7 +134,7 @@ async function startBot() {
                 endOfDayNotified = false;
             }
 
-            // 2. Уведомления об уроках и 12:30 (ТОЛЬКО В ГРУППЫ)
+            // Уведомления об уроках (только в группы)
             if (dayKey && scheduleData[dayKey]) {
                 const lessons = scheduleData[dayKey].lessons;
                 for (const lesson of lessons) {
@@ -154,7 +159,6 @@ async function startBot() {
             }
         }, 15000);
 
-        // Обработка входящих сообщений
         sock.ev.on('messages.upsert', async (m) => {
             if (m.type !== 'notify') return;
 
@@ -164,7 +168,6 @@ async function startBot() {
                 const remoteJid = msg.key.remoteJid;
                 if (!remoteJid) continue;
 
-                // Если это группа, сохраняем её для будущих авто-рассылок
                 if (remoteJid.endsWith('@g.us')) {
                     activeGroups.add(remoteJid);
                 }
@@ -172,16 +175,18 @@ async function startBot() {
                 const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
                 if (!text) continue;
 
-                // Обрабатываем команды
-                const replyText = handleIncomingMessage(text);
+                const replyResult = handleIncomingMessage(text);
 
-                if (replyText) {
-                    // Команды работают везде (и в ЛС, и в группах)
-                    await sock.sendMessage(
-                        remoteJid,
-                        { text: replyText },
-                        { quoted: msg }
-                    );
+                if (replyResult) {
+                    // Если команда возвращает массив (как /grr), отправляем по очереди два сообщения
+                    if (Array.isArray(replyResult)) {
+                        for (const part of replyResult) {
+                            await sock.sendMessage(remoteJid, { text: part }, { quoted: msg });
+                            await delay(800);
+                        }
+                    } else {
+                        await sock.sendMessage(remoteJid, { text: replyResult }, { quoted: msg });
+                    }
                 }
             }
         });
