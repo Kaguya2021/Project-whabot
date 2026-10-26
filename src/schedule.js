@@ -1,6 +1,5 @@
 const config = require('./config');
 
-// Актуальное расписание 9-В класса (6 уроков)
 const scheduleData = {
     monday: {
         name: 'Понедельник',
@@ -75,7 +74,6 @@ function getFullScheduleMenu() {
            `/понедельник\n/вторник\n/среда\n/четверг\n/пятница`;
 }
 
-// Получить текущий день недели (UTC+6 Кыргызстан)
 function getCurrentDayKey() {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -92,7 +90,6 @@ function getCurrentDayKey() {
     return daysMap[dayIndex] || null;
 }
 
-// Получить текущее время HH:MM по Кыргызстану
 function getCurrentTimeString() {
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -102,10 +99,20 @@ function getCurrentTimeString() {
     return `${hours}:${minutes}`;
 }
 
+function getCurrentDateString() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const kgDate = new Date(utc + (3600000 * 6));
+    const day = String(kgDate.getDate()).padStart(2, '0');
+    const month = String(kgDate.getMonth() + 1).padStart(2, '0');
+    return `${day}.${month}`;
+}
+
 module.exports = {
     scheduleData,
     formatDaySchedule,
     getFullScheduleMenu,
     getCurrentDayKey,
-    getCurrentTimeString
+    getCurrentTimeString,
+    getCurrentDateString
 };
