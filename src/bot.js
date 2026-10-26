@@ -1,6 +1,6 @@
 const { formatDaySchedule, getFullScheduleMenu } = require('./schedule');
-const { getPeopleList } = require('./people');
-const { getBananaResponse, getNewsResponse, getPalcResponse, getRandomBaranFact, getKaguyaFortune } = require('./fun');
+const { getPeopleList, getBirthdayGreeting } = require('./people');
+const { getBananaResponse, getNewsResponse, getPalcResponse, getRandomBaranFact } = require('./fun');
 
 function handleIncomingMessage(text) {
     const cleanText = text.trim();
@@ -65,7 +65,16 @@ function handleIncomingMessage(text) {
                    `/создатель — информация об авторе\n` +
                    `/помощь — список команд`;
 
-        // Секретные команды (скрыты из меню /помощь)
+        // Секретные команды (нет в /помощь)
+        case '/panel':
+            return `🎛️ Секретная панель управления:\n\n` +
+                   `/понедельник\n/вторник\n/среда\n/четверг\n/пятница\n` +
+                   `/расписание\n/люди\n/создатель\n/grr [Имя]\n` +
+                   `/banana\n/news\n/palc\n/baran`;
+
+        case '/grr':
+            return getBirthdayGreeting(targetParam) || 'Укажите имя ученика, например: /grr Эмир';
+
         case '/banana':
             return getBananaResponse(targetParam);
 
@@ -78,11 +87,8 @@ function handleIncomingMessage(text) {
         case '/baran':
             return getRandomBaranFact();
 
-        case '/fortune':
-            return getKaguyaFortune();
-
         default:
-            return `Неизвестная команда.\nИспользуйте /помощь, чтобы посмотреть доступные команды.`;
+            return null; // Неизвестные команды игнорируются в группах
     }
 }
 
