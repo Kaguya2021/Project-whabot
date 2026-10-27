@@ -6,8 +6,9 @@ const readline = require('readline');
 const config = require('./src/config');
 const { createPostgresAuth } = require('./src/postgresAuth');
 const { handleIncomingMessage } = require('./src/bot');
-const { scheduleData, getCurrentDayKey, getCurrentTimeString, getCurrentDateString } = require('./src/schedule');
+const { getCurrentTimeString, getCurrentDateString } = require('./src/schedule');
 const { checkBirthdayByDate } = require('./src/people');
+const { getAIResponse } = require('./src/ai');
 
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
@@ -95,7 +96,7 @@ async function startBot() {
                 for (const text of messages) {
                     try {
                         await sock.sendMessage(jid, { text });
-                        await delay(1000); // небольшая пауза между сообщениями
+                        await delay(1000);
                     } catch (err) {
                         console.error(`[ERROR] Не удалось отправить в группу ${jid}:`, err);
                     }
@@ -103,18 +104,15 @@ async function startBot() {
             }
         }
 
-        let notifiedLessons = new Set();
-        let endOfDayNotified = false;
         let birthdayCheckedDate = '';
 
+        // Фоновый таймер только для дней рождения в 00:00 (уведомления об уроках полностью удалены!)
         setInterval(async () => {
             if (!sock.authState.creds.registered) return;
 
             const timeStr = getCurrentTimeString();
             const dateStr = getCurrentDateString();
-            const dayKey = getCurrentDayKey();
 
-            // Авто-поздравление с ДР в 00:00 (два сообщения в группы)
             if (timeStr === '00:00' && birthdayCheckedDate !== dateStr) {
                 birthdayCheckedDate = dateStr;
                 const birthdayPersons = checkBirthdayByDate(dateStr);
@@ -128,37 +126,9 @@ async function startBot() {
                     }
                 }
             }
-
-            if (timeStr === '00:00') {
-                notifiedLessons.clear();
-                endOfDayNotified = false;
-            }
-
-            // Уведомления об уроках (только в группы)
-            if (dayKey && scheduleData[dayKey]) {
-                const lessons = scheduleData[dayKey].lessons;
-                for (const lesson of lessons) {
-                    const startKey = `${dayKey}-${lesson.subject}-start`;
-                    const endKey = `${dayKey}-${lesson.subject}-end`;
-
-                    if (timeStr === lesson.timeStart && !notifiedLessons.has(startKey)) {
-                        notifiedLessons.add(startKey);
-                        await broadcastToGroups(`🔔 Урок *${lesson.subject}* начинается прямо сейчас (${lesson.timeStart})!`);
-                    }
-
-                    if (timeStr === lesson.timeEnd && !notifiedLessons.has(endKey)) {
-                        notifiedLessons.add(endKey);
-                        await broadcastToGroups(`🏁 Урок *${lesson.subject}* окончен (${lesson.timeEnd}). Переменка!`);
-                    }
-                }
-
-                if (timeStr === '12:30' && !endOfDayNotified) {
-                    endOfDayNotified = true;
-                    await broadcastToGroups(`🎉 Уроки закончены! Ты пока жива, и это главное :) Удачи и отличного отдыха!`);
-                }
-            }
         }, 15000);
 
+        // Обработка входящих сообщений
         sock.ev.on('messages.upsert', async (m) => {
             if (m.type !== 'notify') return;
 
@@ -178,14 +148,45 @@ async function startBot() {
                 const replyResult = handleIncomingMessage(text);
 
                 if (replyResult) {
-                    // Если команда возвращает массив (как /grr), отправляем по очереди два сообщения
-                    if (Array.isArray(replyResult)) {
+                    // Обработка ИИ запроса через аккаунт (Meta AI / Бизнес-ассистент)
+                    if (typeof replyResult === 'object' && replyResult.type === 'ai') {
+                        // 1. Отправляем сообщение с репликой (цитированием исходного сообщения) "🔍 Анализирую..."
+                        const analyzingMsg = await sock.sendMessage(
+                            remoteJid,
+                            { text: '🔍 Анализирую...' },
+                            { quoted: msg }
+                        );
+
+                        // 2. Включаем статус печати от лица бота (как у Meta AI)
+                        await sock.sendPresenceUpdate('composing', remoteJid);
+                        await delay(1500);
+
+                        // 3. Получаем ответ от ИИ
+                        const aiAnswer = await getAIResponse(sock, remoteJid, replyResult.query);
+
+                        await sock.sendPresenceUpdate('paused', remoteJid);
+
+                        // 4. Отправляем результат ИИ с репликой на исходное сообщение пользователя
+                        await sock.sendMessage(
+                            remoteJid,
+                            { text: aiAnswer },
+                            { quoted: msg }
+                        );
+                    } 
+                    // Обработка массива сообщений (например, поздравления /grr)
+                    else if (Array.isArray(replyResult)) {
                         for (const part of replyResult) {
                             await sock.sendMessage(remoteJid, { text: part }, { quoted: msg });
                             await delay(800);
                         }
-                    } else {
-                        await sock.sendMessage(remoteJid, { text: replyResult }, { quoted: msg });
+                    } 
+                    // Обычный текстовый ответ на команды
+                    else {
+                        await sock.sendMessage(
+                            remoteJid,
+                            { text: replyResult },
+                            { quoted: msg }
+                        );
                     }
                 }
             }
