@@ -8,7 +8,7 @@ const { createPostgresAuth } = require('./src/postgresAuth');
 const { handleIncomingMessage } = require('./src/bot');
 const { getCurrentTimeString, getCurrentDateString } = require('./src/schedule');
 const { checkBirthdayByDate } = require('./src/people');
-const { getAIResponse } = require('./src/ai');
+const { getAIResponse, handleIncomingAIMessage } = require('./src/ai');
 
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
@@ -106,7 +106,7 @@ async function startBot() {
 
         let birthdayCheckedDate = '';
 
-        // Фоновый таймер только для дней рождения в 00:00 (уведомления об уроках полностью удалены!)
+        // Фоновый таймер только для проверки дней рождения в 00:00 в группах
         setInterval(async () => {
             if (!sock.authState.creds.registered) return;
 
@@ -133,7 +133,12 @@ async function startBot() {
             if (m.type !== 'notify') return;
 
             for (const msg of m.messages) {
-                if (!msg.message || msg.key.fromMe) continue;
+                if (!msg.message) continue;
+
+                // Перехватываем ответы от Meta AI для команды /ai
+                handleIncomingAIMessage(msg);
+
+                if (msg.key.fromMe) continue;
 
                 const remoteJid = msg.key.remoteJid;
                 if (!remoteJid) continue;
@@ -148,32 +153,31 @@ async function startBot() {
                 const replyResult = handleIncomingMessage(text);
 
                 if (replyResult) {
-                    // Обработка ИИ запроса через аккаунт (Meta AI / Бизнес-ассистент)
+                    // Обработка запроса ИИ (/ai)
                     if (typeof replyResult === 'object' && replyResult.type === 'ai') {
-                        // 1. Отправляем сообщение с репликой (цитированием исходного сообщения) "🔍 Анализирую..."
-                        const analyzingMsg = await sock.sendMessage(
+                        // 1. Отправляем сообщение с репликой "🔍 Анализирую..."
+                        await sock.sendMessage(
                             remoteJid,
                             { text: '🔍 Анализирую...' },
                             { quoted: msg }
                         );
 
-                        // 2. Включаем статус печати от лица бота (как у Meta AI)
+                        // 2. Включаем статус печати
                         await sock.sendPresenceUpdate('composing', remoteJid);
-                        await delay(1500);
 
-                        // 3. Получаем ответ от ИИ
+                        // 3. Получаем ответ от ассистента
                         const aiAnswer = await getAIResponse(sock, remoteJid, replyResult.query);
 
                         await sock.sendPresenceUpdate('paused', remoteJid);
 
-                        // 4. Отправляем результат ИИ с репликой на исходное сообщение пользователя
+                        // 4. Отправляем чистый ответ ИИ с репликой на сообщение пользователя
                         await sock.sendMessage(
                             remoteJid,
                             { text: aiAnswer },
                             { quoted: msg }
                         );
                     } 
-                    // Обработка массива сообщений (например, поздравления /grr)
+                    // Обработка массива (для /grr — поздравление + призыв ребят)
                     else if (Array.isArray(replyResult)) {
                         for (const part of replyResult) {
                             await sock.sendMessage(remoteJid, { text: part }, { quoted: msg });
