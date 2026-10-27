@@ -69,8 +69,12 @@ function handleIncomingMessage(text) {
         case '/panel':
             return `🎛️ Секретная панель управления:\n\n` +
                    `/понедельник\n/вторник\n/среда\n/четверг\n/пятница\n` +
-                   `/расписание\n/люди\n/создатель\n/grr [Имя]\n` +
+                   `/расписание\n/люди\n/создатель\n/ai [текст]\n/grr [Имя]\n` +
                    `/banana\n/news\n/palc\n/baran`;
+
+        case '/ai':
+            // Обрабатывается отдельно в index.js для анимации "Анализирую..." и реплики
+            return { type: 'ai', query: targetParam };
 
         case '/grr':
             return getBirthdayGreeting(targetParam) || 'Укажите имя ученика, например: /grr Эмир';
