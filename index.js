@@ -81,8 +81,8 @@ async function startBot() {
                 if (birthdayPersons.length > 0) {
                     for (const person of birthdayPersons) {
                         const msgs = [
-                            `🎉 ${person.name}, с днём рождения! Желаем море позитива, океан счастья и ярких моментов. Пусть всё задуманное обязательно сбудется! ✨`,
-                            `💬 Ребята, давайте все вместе поздравим ${person.dat}!)`
+                            `${person.name}, с днём рождения! Желаем море позитива, океан счастья и ярких моментов. Пусть всё задуманное обязательно сбудется!`,
+                            `Ребята, давайте все вместе поздравим ${person.dat}!)`
                         ];
                         await broadcastToGroups(msgs);
                     }
@@ -107,20 +107,19 @@ async function startBot() {
                 const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
                 if (!text) continue;
 
-                const senderName = msg.pushName || 'Участник';
+                const senderName = msg.pushName || 'Kaguya';
                 const contextInfo = msg.message.extendedTextMessage?.contextInfo;
 
-                // Проверяем RP-команду по реплаю (если это ответ на чье-то сообщение и текст — точное слово RP)
+                // Проверяем RP-команду по реплаю
                 if (contextInfo && contextInfo.quotedMessage) {
                     const cleanWord = text.trim().toLowerCase();
                     if (rpActions[cleanWord]) {
-                        // Пытаемся найти имя автора процитированного сообщения
-                        // В WhatsApp имя может содержаться в контексте или определяться через pushName
                         let targetName = 'участника';
                         if (contextInfo.participant) {
-                            // Можно достать из pushName если передано, либо выделить из JID/хранилища
-                            const participantJid = contextInfo.participant;
-                            targetName = participantJid.split('@')[0]; 
+                            try {
+                                const resolvedName = await sock.getName(contextInfo.participant);
+                                if (resolvedName) targetName = resolvedName;
+                            } catch (e) {}
                         }
 
                         const rpResult = processRp(cleanWord, senderName, targetName);
@@ -138,7 +137,7 @@ async function startBot() {
                     if (typeof replyResult === 'object' && replyResult.type === 'ai') {
                         await sock.sendMessage(
                             remoteJid,
-                            { text: '🔍 Анализирую...' },
+                            { text: 'Анализирую...' },
                             { quoted: msg }
                         );
 
