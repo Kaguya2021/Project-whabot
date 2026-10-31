@@ -17,7 +17,6 @@ http.createServer((req, res) => {
     res.end('OK');
 }).listen(PORT);
 
-// Кеш сообщений для точного хранения текста и автора по ID
 const messageStore = new Map();
 
 async function startBot() {
@@ -108,7 +107,6 @@ async function startBot() {
                 const msgText = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
                 const senderParticipant = msg.key.participant || remoteJid;
 
-                // Сохраняем в кеш каждое сообщение
                 if (msg.key && msg.key.id) {
                     messageStore.set(msg.key.id, {
                         participant: senderParticipant,
@@ -130,6 +128,9 @@ async function startBot() {
                 if (contextInfo && contextInfo.quotedMessage) {
                     const cleanWord = msgText.trim().toLowerCase();
                     if (rpActions[cleanWord]) {
+                        // Небольшая пауза, чтобы бот успел заглянуть в память и проверить данные
+                        await delay(350);
+
                         const quotedId = contextInfo.stanzaId;
                         const cachedMsg = messageStore.get(quotedId) || {};
 
