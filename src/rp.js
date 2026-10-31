@@ -41,21 +41,18 @@ const phoneToName = {
 };
 
 function resolveTargetName(participantJid, quotedText, rawName) {
-    // Собираем всё, где может быть подсказка об имени (номер, текст сообщения, имя)
     const searchStrings = [participantJid, quotedText, rawName].filter(Boolean);
 
     for (const str of searchStrings) {
         const cleanStr = String(str);
         const cleanNum = cleanStr.replace(/[^0-9]/g, '');
         
-        // Проверка по номеру
         for (const [phone, name] of Object.entries(phoneToName)) {
             if (cleanNum && cleanNum.includes(phone)) {
                 return name;
             }
         }
 
-        // Проверка по ключевым словам и никам (включая часть со скобками и никами вроде b@rsbek)
         const lowerStr = cleanStr.toLowerCase();
         const map = {
             'мбанк': 'Эмира',
