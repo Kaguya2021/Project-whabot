@@ -17,8 +17,8 @@ http.createServer((req, res) => {
     res.end('OK');
 }).listen(PORT);
 
-// Кеш для сохранения имен участников из чата
-const userNamesCache = new Map();
+// Кеш сообщений для точного определения автора по реплаю
+const messageCache = new Map();
 
 async function startBot() {
     if (!config.databaseUrl) return;
@@ -105,10 +105,17 @@ async function startBot() {
                     activeGroups.add(remoteJid);
                 }
 
-                // Запоминаем имя отправителя в кеш
-                const senderJid = msg.key.participant || remoteJid;
-                if (senderJid && msg.pushName) {
-                    userNamesCache.set(senderJid, msg.pushName);
+                // Сохраняем сообщение в кеш по его ID для точного реплая
+                if (msg.key && msg.key.id) {
+                    messageCache.set(msg.key.id, {
+                        participant: msg.key.participant || remoteJid,
+                        pushName: msg.pushName || ''
+                    });
+                    // Ограничиваем размер кеша, чтобы не занимать много памяти
+                    if (messageCache.size > 500) {
+                        const firstKey = messageCache.keys().next().value;
+                        messageCache.delete(firstKey);
+                    }
                 }
 
                 if (msg.key.fromMe) continue;
@@ -122,15 +129,18 @@ async function startBot() {
                 if (contextInfo && contextInfo.quotedMessage) {
                     const cleanWord = text.trim().toLowerCase();
                     if (rpActions[cleanWord]) {
-                        const quotedParticipant = contextInfo.participant || remoteJid;
-                        let targetName = userNamesCache.get(quotedParticipant) || 'участника';
+                        const quotedId = contextInfo.stanzaId;
+                        const quotedData = messageCache.get(quotedId) || {};
+
+                        const participantJid = quotedData.participant || contextInfo.participant || remoteJid;
+                        let targetName = quotedData.pushName || 'участника';
 
                         try {
-                            const resolvedName = await sock.getName(quotedParticipant);
+                            const resolvedName = await sock.getName(participantJid);
                             if (resolvedName) targetName = resolvedName;
                         } catch (e) {}
 
-                        const rpResult = processRp(cleanWord, senderName, quotedParticipant, targetName);
+                        const rpResult = processRp(cleanWord, senderName, participantJid, targetName);
                         if (rpResult) {
                             await sock.sendMessage(remoteJid, { text: rpResult }, { quoted: msg });
                             continue;
