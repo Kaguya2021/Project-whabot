@@ -30,7 +30,7 @@ async function getAIResponse(sock, senderJid, queryText) {
     if (lastRequestAt.size > 500) lastRequestAt.delete(lastRequestAt.keys().next().value);
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    const timer = setTimeout(() => controller.abort(), 60000);
 
     try {
         const res = await fetch(`${API_BASE}/${encodeURIComponent(config.aiModel)}:generateContent`, {
