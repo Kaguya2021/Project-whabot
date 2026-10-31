@@ -39,9 +39,9 @@ function handleIncomingMessage(text) {
             return `╭━━━━━━━━━━━━━━━━━━━━╮\n` +
                    `✦ 𝐂𝐑𝐄𝐀𝐓𝐎𝐑 𝐈𝐍𝐅𝐎 ✦\n` +
                    `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-                   `👑 **Создатель:** Kaguya 2.0\n` +
-                   `💻 **Разработчик:** Kaguya 2.0\n` +
-                   `⚡ **Автор проекта:** Kaguya 2.0\n\n` +
+                   `👑 **Создатель:** Kaguya\n` +
+                   `💻 **Разработчик:** Kaguya\n` +
+                   `⚡ **Автор проекта:** Kaguya\n\n` +
                    `╭─────── SOCIAL MEDIA ───────╮\n\n` +
                    `✈️ **Telegram:** @kaguya2_0\n` +
                    `🔗 https://t.me/kaguya2_0\n\n` +
@@ -49,7 +49,7 @@ function handleIncomingMessage(text) {
                    `🔗 https://wa.me/996700214091\n\n` +
                    `╰──────────────────────────╯\n\n` +
                    `🛠️ Разработка • Обновления • Новые проекты\n\n` +
-                   `♥️ С любовью, **Kaguya 2.0**\n` +
+                   `♥️ С любовью, **Kaguya**\n` +
                    `╰━━━━━━━━━━━━━━━━━━━━╯`;
 
         case '/помощь':
@@ -65,7 +65,6 @@ function handleIncomingMessage(text) {
                    `/создатель — информация об авторе\n` +
                    `/помощь — список команд`;
 
-        // Секретные команды и панель управления (скрыты из /помощь)
         case '/panel':
             return `🎛️ Секретная панель управления:\n\n` +
                    `/понедельник\n/вторник\n/среда\n/четверг\n/пятница\n` +
@@ -73,7 +72,6 @@ function handleIncomingMessage(text) {
                    `/banana\n/news\n/palc\n/baran`;
 
         case '/ai':
-            // Обрабатывается отдельно в index.js для анимации "Анализирую..." и реплики
             return { type: 'ai', query: targetParam };
 
         case '/grr':
