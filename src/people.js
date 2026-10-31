@@ -43,30 +43,41 @@ function getPeopleList() {
     return response.trim();
 }
 
+function buildBirthdayMessages(person) {
+    return [
+        `🎉 ${person.name}, с днём рождения! Желаем море позитива, океан счастья и ярких моментов. Пусть всё задуманное обязательно сбудется! ✨`,
+        `💬 Ребята, давайте все вместе поздравим ${person.dat}!)`
+    ];
+}
+
+// Приоритет: полное ФИО -> имя -> фамилия -> имя с начала -> подстрока (от 3 букв)
+function findStudent(query) {
+    const q = String(query || '').toLowerCase().trim();
+    if (q.length < 2) return null;
+
+    const lower = studentsBirthdays.map(st => ({
+        st,
+        full: st.fullName.toLowerCase(),
+        name: st.name.toLowerCase(),
+        surname: st.fullName.toLowerCase().split(' ')[0]
+    }));
+
+    return (
+        lower.find(x => x.full === q) ||
+        lower.find(x => x.name === q) ||
+        lower.find(x => x.surname === q) ||
+        lower.find(x => x.name.startsWith(q)) ||
+        (q.length >= 3 ? lower.find(x => x.full.includes(q)) : undefined)
+    )?.st || null;
+}
+
 function getBirthdayGreeting(query) {
-    if (!query) return null;
-    const q = query.toLowerCase().trim();
-
-    let found = studentsBirthdays.find(st => 
-        st.fullName.toLowerCase() === q || 
-        st.fullName.toLowerCase().includes(q)
-    );
-
-    if (!found) {
-        found = studentsBirthdays.find(st => st.name.toLowerCase() === q);
-    }
-
-    if (!found) return null;
-
-    // Возвращаем массив из двух строк для отправки двумя сообщениями
-    const msg1 = `🎉 ${found.name}, с днём рождения! Желаем море позитива, океан счастья и ярких моментов. Пусть всё задуманное обязательно сбудется! ✨`;
-    const msg2 = `💬 Ребята, давайте все вместе поздравим ${found.dat}!)`;
-
-    return [msg1, msg2];
+    const found = findStudent(query);
+    return found ? buildBirthdayMessages(found) : null;
 }
 
 function checkBirthdayByDate(dateStr) {
     return studentsBirthdays.filter(st => st.date === dateStr);
 }
 
-module.exports = { getPeopleList, getBirthdayGreeting, checkBirthdayByDate, studentsBirthdays };
+module.exports = { getPeopleList, getBirthdayGreeting, buildBirthdayMessages, checkBirthdayByDate, studentsBirthdays };
