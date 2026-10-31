@@ -80,7 +80,7 @@ async function startBot() {
                 if (birthdayPersons.length > 0) {
                     for (const person of birthdayPersons) {
                         const msgs = [
-                            `${person.name}, с днём рождения! Желаем море позитива, океан счастья и ярких моментов. Пусть всё задуманное обязательно сбудется!`,
+                            `${person.name}, с днём рождения! Желаем море позитива, океан счастья и ярких моментов. Пусть всё задуманное обязательно сбудется! :)`,
                             `Ребята, давайте все вместе поздравим ${person.dat}!)`
                         ];
                         await broadcastToGroups(msgs);
@@ -108,7 +108,6 @@ async function startBot() {
                 const senderName = msg.pushName || 'Kaguya';
                 const contextInfo = msg.message.extendedTextMessage?.contextInfo;
 
-                // Обработка RP по реплаю с использованием базы номеров
                 if (contextInfo && contextInfo.quotedMessage) {
                     const cleanWord = text.trim().toLowerCase();
                     if (rpActions[cleanWord]) {
@@ -118,7 +117,7 @@ async function startBot() {
                             if (resolvedName) fallbackName = resolvedName;
                         } catch (e) {}
 
-                        const rpResult = processRp(cleanWord, senderName, contextInfo.participant, fallbackName);
+                        const rpResult = processRp(cleanWord, senderName, contextInfo, fallbackName);
                         if (rpResult) {
                             await sock.sendMessage(remoteJid, { text: rpResult }, { quoted: msg });
                             continue;
@@ -132,13 +131,13 @@ async function startBot() {
                     if (typeof replyResult === 'object' && replyResult.type === 'ai') {
                         await sock.sendMessage(
                             remoteJid,
-                            { text: 'Анализирую...' },
+                            { text: 'Анализирую... :)' },
                             { quoted: msg }
                         );
 
-                        await sock.sendPresenceUpdate('composing', remoteJid);
+                        await sock.sendPresenceUpdate('composing', remoteJid).catch(() => {});
                         const aiAnswer = await getAIResponse(sock, remoteJid, replyResult.query);
-                        await sock.sendPresenceUpdate('paused', remoteJid);
+                        await sock.sendPresenceUpdate('paused', remoteJid).catch(() => {});
 
                         await sock.sendMessage(
                             remoteJid,
