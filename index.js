@@ -128,13 +128,24 @@ async function startBot() {
                 if (contextInfo && contextInfo.quotedMessage) {
                     const cleanWord = msgText.trim().toLowerCase();
                     if (rpActions[cleanWord]) {
-                        // Небольшая пауза, чтобы бот успел заглянуть в память и проверить данные
-                        await delay(350);
+                        await delay(400);
 
                         const quotedId = contextInfo.stanzaId;
                         const cachedMsg = messageStore.get(quotedId) || {};
 
-                        const participantJid = cachedMsg.participant || contextInfo.participant || remoteJid;
+                        let participantJid = cachedMsg.participant || contextInfo.participant || remoteJid;
+                        
+                        // Если это групповой чат, пробуем подтянуть реальный JID участника из метаданных группы
+                        if (remoteJid.endsWith('@g.us')) {
+                            try {
+                                const metadata = await sock.groupMetadata(remoteJid);
+                                const foundMember = metadata.participants.find(p => p.id === participantJid || p.id.includes(quotedId));
+                                if (foundMember) {
+                                    participantJid = foundMember.id;
+                                }
+                            } catch (e) {}
+                        }
+
                         const quotedText = cachedMsg.text || '';
                         let targetName = cachedMsg.pushName || 'участника';
 
