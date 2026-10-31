@@ -1,4 +1,4 @@
-const config = require('./config');
+// /ai без API-ключа: бесплатный сервис Pollinations.ai (text.pollinations.ai)
 
 const SYSTEM_PROMPT =
     'Ты Kaguya — дружелюбный бот 9-В класса, отвечаешь в WhatsApp-чате школьников. ' +
@@ -6,79 +6,107 @@ const SYSTEM_PROMPT =
     'Форматирование WhatsApp: жирный — *текст* (одна звёздочка), без markdown-заголовков и таблиц. ' +
     'Не помогай с вредными, опасными или взрослыми темами — вежливо откажись.';
 
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const MODEL = process.env.AI_MODEL || 'openai';
+const POST_URL = 'https://text.pollinations.ai/openai';
+const GET_URL = 'https://text.pollinations.ai/';
+
+const USER_COOLDOWN_MS = 20000;   // один человек — не чаще раза в 20 сек
+const GLOBAL_GAP_MS = 15000;      // анонимный лимит сервиса ~1 запрос в 15 сек на всех
+const TIMEOUT_MS = 60000;
+
 const HINT = '🤖 Напиши после /ai свой вопрос, например: /ai Что такое фотосинтез?';
 const FAIL = '😵 ИИ сейчас не отвечает, попробуй позже.';
 
-const lastRequestAt = new Map(); // senderJid -> timestamp, защита от спама
+const lastUserAt = new Map();
+let lastGlobalAt = 0;
+
+// Сервис иногда дописывает рекламный блок в конец ответа — убираем.
+function cleanAnswer(text) {
+    let t = String(text || '').trim();
+    const adIdx = t.search(/\n+\s*(-{3,}|\*{3,})[\s\S]*pollinations/i);
+    if (adIdx > 0) t = t.slice(0, adIdx);
+    t = t.replace(/^.*powered by pollinations.*$/gim, '').trim();
+    return t;
+}
+
+async function fetchWithTimeout(url, options) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function askPost(query) {
+    const res = await fetchWithTimeout(POST_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+            model: MODEL,
+            messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: query }
+            ]
+        })
+    });
+    if (!res.ok) throw new Error(`POST HTTP ${res.status}`);
+
+    const raw = await res.text();
+    try {
+        const data = JSON.parse(raw);
+        return data.choices?.[0]?.message?.content || '';
+    } catch (e) {
+        return raw; // сервис мог вернуть просто текст
+    }
+}
+
+async function askGet(query) {
+    const url = `${GET_URL}${encodeURIComponent(query)}?model=${encodeURIComponent(MODEL)}&system=${encodeURIComponent(SYSTEM_PROMPT)}`;
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (!res.ok) throw new Error(`GET HTTP ${res.status}`);
+    return await res.text();
+}
 
 async function getAIResponse(sock, senderJid, queryText) {
     const query = (queryText || '').trim();
     if (!query) return HINT;
 
-    if (!config.aiApiKey) {
-        return '⚠️ ИИ пока не подключён: в настройках бота не задан GEMINI_API_KEY.';
-    }
-
     const now = Date.now();
-    const last = lastRequestAt.get(senderJid) || 0;
-    if (now - last < config.aiCooldownMs) {
-        const wait = Math.ceil((config.aiCooldownMs - (now - last)) / 1000);
+
+    const lastUser = lastUserAt.get(senderJid) || 0;
+    if (now - lastUser < USER_COOLDOWN_MS) {
+        const wait = Math.ceil((USER_COOLDOWN_MS - (now - lastUser)) / 1000);
         return `⏳ Подожди ${wait} сек. перед следующим вопросом.`;
     }
-    lastRequestAt.set(senderJid, now);
-    if (lastRequestAt.size > 500) lastRequestAt.delete(lastRequestAt.keys().next().value);
+    if (now - lastGlobalAt < GLOBAL_GAP_MS) {
+        const wait = Math.ceil((GLOBAL_GAP_MS - (now - lastGlobalAt)) / 1000);
+        return `⏳ ИИ сейчас занят другим запросом, попробуй через ${wait} сек.`;
+    }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60000);
+    lastUserAt.set(senderJid, now);
+    lastGlobalAt = now;
+    if (lastUserAt.size > 500) lastUserAt.delete(lastUserAt.keys().next().value);
 
+    const prompt = query.slice(0, 1500);
+
+    let answer = '';
     try {
-        const res = await fetch(`${API_BASE}/${encodeURIComponent(config.aiModel)}:generateContent`, {
-            method: 'POST',
-            signal: controller.signal,
-            headers: {
-                'content-type': 'application/json',
-                'x-goog-api-key': config.aiApiKey
-            },
-            body: JSON.stringify({
-                systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-                contents: [{ role: 'user', parts: [{ text: query.slice(0, 2000) }] }],
-                generationConfig: { maxOutputTokens: 1500, temperature: 0.7 }
-            })
-        });
-
-        if (!res.ok) {
-            const body = await res.text().catch(() => '');
-            console.error('[ai] HTTP', res.status, body.slice(0, 300));
-            if (res.status === 429) return '⏳ На сегодня (или на эту минуту) лимит бесплатного ИИ исчерпан, попробуй позже.';
-            if (res.status === 404) console.error('[ai] Модель не найдена. Проверь GEMINI_MODEL в .env');
+        answer = await askPost(prompt);
+    } catch (err) {
+        console.error('[ai] основной запрос не удался:', err.name === 'AbortError' ? 'таймаут' : err.message);
+        try {
+            answer = await askGet(prompt);
+        } catch (err2) {
+            console.error('[ai] запасной запрос не удался:', err2.name === 'AbortError' ? 'таймаут' : err2.message);
             return FAIL;
         }
-
-        const data = await res.json();
-
-        if (data.promptFeedback?.blockReason) {
-            return '🚫 На такой вопрос я отвечать не буду.';
-        }
-
-        const candidate = data.candidates?.[0];
-        const text = (candidate?.content?.parts || [])
-            .map(part => part.text || '')
-            .join('')
-            .trim();
-
-        if (!text) {
-            return candidate?.finishReason === 'SAFETY'
-                ? '🚫 На такой вопрос я отвечать не буду.'
-                : '🤔 ИИ вернул пустой ответ, переформулируй вопрос.';
-        }
-        return `✨ *Kaguya AI:*\n\n${text.slice(0, 3500)}`;
-    } catch (err) {
-        console.error('[ai] ошибка:', err.name === 'AbortError' ? 'таймаут 30с' : err.message);
-        return FAIL;
-    } finally {
-        clearTimeout(timer);
     }
+
+    answer = cleanAnswer(answer);
+    if (!answer) return '🤔 ИИ вернул пустой ответ, переформулируй вопрос.';
+    return `✨ *Kaguya AI:*\n\n${answer.slice(0, 3500)}`;
 }
 
 module.exports = { getAIResponse };
