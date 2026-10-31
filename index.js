@@ -68,7 +68,6 @@ async function startBot() {
 
         let birthdayCheckedDate = '';
 
-        // Проверка дней рождения ровно в 00:00 в группах
         setInterval(async () => {
             if (!sock.authState.creds.registered) return;
 
@@ -90,7 +89,6 @@ async function startBot() {
             }
         }, 15000);
 
-        // Обработка входящих сообщений
         sock.ev.on('messages.upsert', async (m) => {
             if (m.type !== 'notify') return;
 
@@ -110,19 +108,17 @@ async function startBot() {
                 const senderName = msg.pushName || 'Kaguya';
                 const contextInfo = msg.message.extendedTextMessage?.contextInfo;
 
-                // Проверяем RP-команду по реплаю
+                // Обработка RP по реплаю с использованием базы номеров
                 if (contextInfo && contextInfo.quotedMessage) {
                     const cleanWord = text.trim().toLowerCase();
                     if (rpActions[cleanWord]) {
-                        let targetName = 'участника';
-                        if (contextInfo.participant) {
-                            try {
-                                const resolvedName = await sock.getName(contextInfo.participant);
-                                if (resolvedName) targetName = resolvedName;
-                            } catch (e) {}
-                        }
+                        let fallbackName = 'участника';
+                        try {
+                            const resolvedName = await sock.getName(contextInfo.participant);
+                            if (resolvedName) fallbackName = resolvedName;
+                        } catch (e) {}
 
-                        const rpResult = processRp(cleanWord, senderName, targetName);
+                        const rpResult = processRp(cleanWord, senderName, contextInfo.participant, fallbackName);
                         if (rpResult) {
                             await sock.sendMessage(remoteJid, { text: rpResult }, { quoted: msg });
                             continue;
@@ -130,7 +126,6 @@ async function startBot() {
                     }
                 }
 
-                // Обычные команды бота
                 const replyResult = handleIncomingMessage(text);
 
                 if (replyResult) {
