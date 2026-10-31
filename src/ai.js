@@ -6,16 +6,18 @@ const SYSTEM_PROMPT =
     'Форматирование WhatsApp: жирный — *текст* (одна звёздочка), без markdown-заголовков и таблиц. ' +
     'Не помогай с вредными, опасными или взрослыми темами — вежливо откажись.';
 
-const lastRequestAt = new Map(); // senderJid -> timestamp, защита от спама
-
+const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const HINT = '🤖 Напиши после /ai свой вопрос, например: /ai Что такое фотосинтез?';
+const FAIL = '😵 ИИ сейчас не отвечает, попробуй позже.';
+
+const lastRequestAt = new Map(); // senderJid -> timestamp, защита от спама
 
 async function getAIResponse(sock, senderJid, queryText) {
     const query = (queryText || '').trim();
     if (!query) return HINT;
 
     if (!config.aiApiKey) {
-        return '⚠️ ИИ пока не подключён: в настройках бота не задан ANTHROPIC_API_KEY.';
+        return '⚠️ ИИ пока не подключён: в настройках бота не задан GEMINI_API_KEY.';
     }
 
     const now = Date.now();
@@ -31,40 +33,49 @@ async function getAIResponse(sock, senderJid, queryText) {
     const timer = setTimeout(() => controller.abort(), 30000);
 
     try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await fetch(`${API_BASE}/${encodeURIComponent(config.aiModel)}:generateContent`, {
             method: 'POST',
             signal: controller.signal,
             headers: {
                 'content-type': 'application/json',
-                'x-api-key': config.aiApiKey,
-                'anthropic-version': '2023-06-01'
+                'x-goog-api-key': config.aiApiKey
             },
             body: JSON.stringify({
-                model: config.aiModel,
-                max_tokens: 600,
-                system: SYSTEM_PROMPT,
-                messages: [{ role: 'user', content: query.slice(0, 2000) }]
+                systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+                contents: [{ role: 'user', parts: [{ text: query.slice(0, 2000) }] }],
+                generationConfig: { maxOutputTokens: 1500, temperature: 0.7 }
             })
         });
 
         if (!res.ok) {
             const body = await res.text().catch(() => '');
             console.error('[ai] HTTP', res.status, body.slice(0, 300));
-            return '😵 ИИ сейчас не отвечает, попробуй позже.';
+            if (res.status === 429) return '⏳ На сегодня (или на эту минуту) лимит бесплатного ИИ исчерпан, попробуй позже.';
+            if (res.status === 404) console.error('[ai] Модель не найдена. Проверь GEMINI_MODEL в .env');
+            return FAIL;
         }
 
         const data = await res.json();
-        const text = (data.content || [])
-            .filter(block => block.type === 'text')
-            .map(block => block.text)
-            .join('\n')
+
+        if (data.promptFeedback?.blockReason) {
+            return '🚫 На такой вопрос я отвечать не буду.';
+        }
+
+        const candidate = data.candidates?.[0];
+        const text = (candidate?.content?.parts || [])
+            .map(part => part.text || '')
+            .join('')
             .trim();
 
-        if (!text) return '🤔 ИИ вернул пустой ответ, переформулируй вопрос.';
+        if (!text) {
+            return candidate?.finishReason === 'SAFETY'
+                ? '🚫 На такой вопрос я отвечать не буду.'
+                : '🤔 ИИ вернул пустой ответ, переформулируй вопрос.';
+        }
         return `✨ *Kaguya AI:*\n\n${text.slice(0, 3500)}`;
     } catch (err) {
         console.error('[ai] ошибка:', err.name === 'AbortError' ? 'таймаут 30с' : err.message);
-        return '😵 ИИ сейчас не отвечает, попробуй позже.';
+        return FAIL;
     } finally {
         clearTimeout(timer);
     }
