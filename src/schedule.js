@@ -8,7 +8,7 @@ const scheduleData = {
             { timeStart: '08:20', timeEnd: '09:05', subject: 'Технол' },
             { timeStart: '09:10', timeEnd: '09:55', subject: 'Хим' },
             { timeStart: '10:05', timeEnd: '10:50', subject: 'Дин тарых' },
-            { timeStart: '10:55', timeEnd: '11:40', subject: 'Алгебр' },
+            { timeStart: '10:55', timeEnd: '11:40', subject: 'Алгебра' },
             { timeStart: '11:45', timeEnd: '12:30', subject: 'К-адаб' }
         ]
     },
@@ -74,38 +74,29 @@ function getFullScheduleMenu() {
            `/понедельник\n/вторник\n/среда\n/четверг\n/пятница`;
 }
 
-function getCurrentDayKey() {
+// Кыргызстан: UTC+6 без перехода на летнее время
+function getKgDate() {
     const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const kgDate = new Date(utc + (3600000 * 6));
-    const dayIndex = kgDate.getDay();
+    return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 6 * 3600000);
+}
 
-    const daysMap = {
-        1: 'monday',
-        2: 'tuesday',
-        3: 'wednesday',
-        4: 'thursday',
-        5: 'friday'
-    };
-    return daysMap[dayIndex] || null;
+function getCurrentDayKey() {
+    const daysMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
+    return daysMap[getKgDate().getDay()] || null;
 }
 
 function getCurrentTimeString() {
-    const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const kgDate = new Date(utc + (3600000 * 6));
-    const hours = String(kgDate.getHours()).padStart(2, '0');
-    const minutes = String(kgDate.getMinutes()).padStart(2, '0');
-    return `${hours}:${minutes}`;
+    const d = getKgDate();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function getCurrentDateString() {
-    const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const kgDate = new Date(utc + (3600000 * 6));
-    const day = String(kgDate.getDate()).padStart(2, '0');
-    const month = String(kgDate.getMonth() + 1).padStart(2, '0');
-    return `${day}.${month}`;
+    const d = getKgDate();
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getCurrentYearString() {
+    return String(getKgDate().getFullYear());
 }
 
 module.exports = {
@@ -114,5 +105,6 @@ module.exports = {
     getFullScheduleMenu,
     getCurrentDayKey,
     getCurrentTimeString,
-    getCurrentDateString
+    getCurrentDateString,
+    getCurrentYearString
 };
