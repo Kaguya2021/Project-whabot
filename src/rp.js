@@ -41,69 +41,84 @@ const phoneToName = {
     '996556214091': 'Kaguya', '556214091': 'Kaguya'
 };
 
-function resolveTargetName(participantJid, quotedText, rawName) {
-    const searchStrings = [participantJid, quotedText, rawName].filter(Boolean);
-
-    for (const str of searchStrings) {
-        const cleanStr = String(str);
-        const cleanNum = cleanStr.replace(/[^0-9]/g, '');
-        
-        for (const [phone, name] of Object.entries(phoneToName)) {
-            if (cleanNum && cleanNum.includes(phone)) {
-                return name;
-            }
-        }
-
-        const lowerStr = cleanStr.toLowerCase();
-        const map = {
-            'мбанк': 'Эмира', 'mbank': 'Эмира',
-            'палчик': 'Байела',
-            'барсик': 'Барсбека', 'barsik': 'Барсбека',
-            'feruza': 'Ферузу', 'феруза': 'Ферузу',
-            'b@rsbek': 'Барсбека', 'барсбек': 'Барсбека',
-            'байел': 'Байела',
-            'надиха': 'Надиху', 'надих': 'Надиху',
-            'адинай': 'Адинай', 'adinaй': 'Адинай',
-            'эмир': 'Эмира',
-            'айбике': 'Айбике',
-            'айдана': 'Айдану',
-            'айзерек': 'Айзирек',
-            'сауле': 'Сауле',
-            'сезим': 'Сезим',
-            'чынгыз': 'Чынгыза',
-            'амина': 'Амину',
-            'раяна': 'Раяну'
-        };
-
-        for (const [key, name] of Object.entries(map)) {
-            if (lowerStr.includes(key)) {
-                return name;
-            }
-        }
-    }
-
-    if (rawName && rawName !== 'участника') {
-        let clean = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, '').trim();
-        if (clean) {
-            if (/[ая]$/i.test(clean)) {
-                return clean.replace(/[ая]$/i, m => m.toLowerCase() === 'а' ? 'у' : 'ю');
-            }
-            return clean;
-        }
-    }
-
-    return 'участника';
+// Индекс: последние 9 цифр номера -> имя (в винительном падеже).
+// Так совпадут и 996707664465, и +996 707 664 465, и 707664465.
+const phoneIndex = new Map();
+for (const [phone, name] of Object.entries(phoneToName)) {
+    phoneIndex.set(phone.replace(/\D/g, '').slice(-9), name);
 }
 
-function processRp(text, senderName, participantJid, quotedText, rawName) {
-    const cleanText = text.trim().toLowerCase();
-    if (!rpActions[cleanText]) return null;
+// Ники — только ТОЧНОЕ совпадение целого слова из имени в WhatsApp (не подстрока).
+const nicknameMap = {
+    'мбанк': 'Эмира', 'mbank': 'Эмира',
+    'палчик': 'Байела',
+    'барсик': 'Барсбека', 'barsik': 'Барсбека', 'b@rsbek': 'Барсбека', 'барсбек': 'Барсбека',
+    'feruza': 'Ферузу', 'феруза': 'Ферузу',
+    'байел': 'Байела',
+    'надиха': 'Надиху', 'надих': 'Надиху',
+    'адинай': 'Адинай', 'adinai': 'Адинай',
+    'эмир': 'Эмира',
+    'айбике': 'Айбике', 'айбийке': 'Айбике',
+    'айдана': 'Айдану',
+    'айзирек': 'Айзирек', 'айзерек': 'Айзирек',
+    'сауле': 'Сауле',
+    'сезим': 'Сезим',
+    'чынгыз': 'Чынгыза',
+    'раяна': 'Раяну'
+    // 'амина' намеренно нет: в классе две Амины, по нику не различить — только по номеру
+};
+
+// Номер берём только из настоящих номерных JID (@s.whatsapp.net / @c.us).
+// @lid — это НЕ номер, цифры в нём случайные.
+function phoneFromJid(jid) {
+    if (typeof jid !== 'string') return null;
+    const [user, server] = jid.split('@');
+    if (server && server !== 's.whatsapp.net' && server !== 'c.us') return null;
+    const digits = user.split(':')[0].replace(/\D/g, '');
+    return digits.length >= 9 ? digits : null;
+}
+
+function nameByJid(jid) {
+    const digits = phoneFromJid(jid);
+    return digits ? (phoneIndex.get(digits.slice(-9)) || null) : null;
+}
+
+function declineName(rawName) {
+    const firstWord = String(rawName || '').replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, ' ').trim().split(/\s+/)[0];
+    if (!firstWord) return null;
+    if (/[ая]$/i.test(firstWord)) {
+        return firstWord.replace(/[ая]$/i, m => (m.toLowerCase() === 'а' ? 'у' : 'ю'));
+    }
+    return firstWord;
+}
+
+/**
+ * target = { jids: string[], pushName: string }
+ * 1) по номеру из любого JID  2) по нику (целое слово)  3) по имени из WhatsApp  4) 'участника'
+ */
+function resolveTargetName(target = {}) {
+    const jids = Array.isArray(target.jids) ? target.jids : [];
+    for (const jid of jids) {
+        const name = nameByJid(jid);
+        if (name) return name;
+    }
+
+    const pushName = String(target.pushName || '');
+    const tokens = pushName.toLowerCase().split(/[^\p{L}\p{N}@]+/u).filter(Boolean);
+    for (const token of tokens) {
+        if (Object.hasOwn(nicknameMap, token)) return nicknameMap[token];
+    }
+
+    return declineName(pushName) || 'участника';
+}
+
+function processRp(text, target) {
+    const cleanText = String(text || '').trim().toLowerCase();
+    if (!Object.hasOwn(rpActions, cleanText)) return null;
 
     const actionText = rpActions[cleanText];
-    const senderClean = 'Kaguya';
-    const targetClean = resolveTargetName(participantJid, quotedText, rawName);
-
-    return `*${senderClean}* ${actionText} *${targetClean}*! :)`;
+    const targetName = resolveTargetName(target);
+    return `*Kaguya* ${actionText} *${targetName}*! :)`;
 }
 
-module.exports = { rpActions, processRp };
+module.exports = { rpActions, processRp, resolveTargetName };
