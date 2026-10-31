@@ -8,7 +8,8 @@ const { createPostgresAuth } = require('./src/postgresAuth');
 const { handleIncomingMessage } = require('./src/bot');
 const { getCurrentTimeString, getCurrentDateString } = require('./src/schedule');
 const { checkBirthdayByDate } = require('./src/people');
-const { getAIResponse, handleIncomingAIMessage } = require('./src/ai');
+const { getAIResponse } = require('./src/ai');
+const { processRp, rpActions } = require('./src/rp');
 
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
@@ -94,10 +95,7 @@ async function startBot() {
             if (m.type !== 'notify') return;
 
             for (const msg of m.messages) {
-                if (!msg.message) continue;
-                handleIncomingAIMessage(msg);
-
-                if (msg.key.fromMe) continue;
+                if (!msg.message || msg.key.fromMe) continue;
 
                 const remoteJid = msg.key.remoteJid;
                 if (!remoteJid) continue;
@@ -109,6 +107,31 @@ async function startBot() {
                 const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
                 if (!text) continue;
 
+                const senderName = msg.pushName || 'Участник';
+                const contextInfo = msg.message.extendedTextMessage?.contextInfo;
+
+                // Проверяем RP-команду по реплаю (если это ответ на чье-то сообщение и текст — точное слово RP)
+                if (contextInfo && contextInfo.quotedMessage) {
+                    const cleanWord = text.trim().toLowerCase();
+                    if (rpActions[cleanWord]) {
+                        // Пытаемся найти имя автора процитированного сообщения
+                        // В WhatsApp имя может содержаться в контексте или определяться через pushName
+                        let targetName = 'участника';
+                        if (contextInfo.participant) {
+                            // Можно достать из pushName если передано, либо выделить из JID/хранилища
+                            const participantJid = contextInfo.participant;
+                            targetName = participantJid.split('@')[0]; 
+                        }
+
+                        const rpResult = processRp(cleanWord, senderName, targetName);
+                        if (rpResult) {
+                            await sock.sendMessage(remoteJid, { text: rpResult }, { quoted: msg });
+                            continue;
+                        }
+                    }
+                }
+
+                // Обычные команды бота
                 const replyResult = handleIncomingMessage(text);
 
                 if (replyResult) {
