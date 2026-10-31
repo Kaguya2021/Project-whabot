@@ -40,18 +40,23 @@ const phoneToName = {
     '556214091': 'Kaguya'
 };
 
-function resolveTargetName(participantJid, rawName) {
-    const searchStrings = [participantJid, rawName].filter(Boolean);
+function resolveTargetName(participantJid, quotedText, rawName) {
+    // Собираем всё, где может быть подсказка об имени (номер, текст сообщения, имя)
+    const searchStrings = [participantJid, quotedText, rawName].filter(Boolean);
 
     for (const str of searchStrings) {
-        const cleanNum = String(str).replace(/[^0-9]/g, '');
+        const cleanStr = String(str);
+        const cleanNum = cleanStr.replace(/[^0-9]/g, '');
+        
+        // Проверка по номеру
         for (const [phone, name] of Object.entries(phoneToName)) {
-            if (cleanNum.includes(phone)) {
+            if (cleanNum && cleanNum.includes(phone)) {
                 return name;
             }
         }
 
-        const lowerStr = String(str).toLowerCase();
+        // Проверка по ключевым словам и никам (включая часть со скобками и никами вроде b@rsbek)
+        const lowerStr = cleanStr.toLowerCase();
         const map = {
             'мбанк': 'Эмира',
             'mbank': 'Эмира',
@@ -65,7 +70,15 @@ function resolveTargetName(participantJid, rawName) {
             'байел': 'Байела',
             'адинай': 'Адинай',
             'adinaй': 'Адинай',
-            'эмир': 'Эмира'
+            'эмир': 'Эмира',
+            'айбике': 'Айбике',
+            'айдана': 'Айдану',
+            'айзерек': 'Айзирек',
+            'сауле': 'Сауле',
+            'сезим': 'Сезим',
+            'чынгыз': 'Чынгыза',
+            'амина': 'Амину',
+            'раяна': 'Раяну'
         };
 
         for (const [key, name] of Object.entries(map)) {
@@ -83,13 +96,13 @@ function resolveTargetName(participantJid, rawName) {
     return 'участника';
 }
 
-function processRp(text, senderName, participantJid, rawName) {
+function processRp(text, senderName, participantJid, quotedText, rawName) {
     const cleanText = text.trim().toLowerCase();
     if (!rpActions[cleanText]) return null;
 
     const actionText = rpActions[cleanText];
     const senderClean = 'Kaguya';
-    const targetClean = resolveTargetName(participantJid, rawName);
+    const targetClean = resolveTargetName(participantJid, quotedText, rawName);
 
     return `*${senderClean}* ${actionText} *${targetClean}*! :)`;
 }
