@@ -13,5 +13,6 @@ module.exports = {
 
     aiApiKey: process.env.GEMINI_API_KEY,
     aiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    aiThinkingLevel: process.env.GEMINI_THINKING ?? 'low',
     aiCooldownMs: 10000
 };
