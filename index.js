@@ -17,6 +17,9 @@ http.createServer((req, res) => {
     res.end('OK');
 }).listen(PORT);
 
+// Кеш сообщений для точного хранения текста и автора по ID
+const messageStore = new Map();
+
 async function startBot() {
     if (!config.databaseUrl) return;
 
@@ -102,23 +105,37 @@ async function startBot() {
                     activeGroups.add(remoteJid);
                 }
 
-                if (msg.key.fromMe) continue;
+                const msgText = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+                const senderParticipant = msg.key.participant || remoteJid;
 
-                const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-                if (!text) continue;
+                // Сохраняем в кеш каждое сообщение
+                if (msg.key && msg.key.id) {
+                    messageStore.set(msg.key.id, {
+                        participant: senderParticipant,
+                        pushName: msg.pushName || '',
+                        text: msgText
+                    });
+                    if (messageStore.size > 1000) {
+                        const firstKey = messageStore.keys().next().value;
+                        messageStore.delete(firstKey);
+                    }
+                }
+
+                if (msg.key.fromMe) continue;
+                if (!msgText) continue;
 
                 const senderName = msg.pushName || 'Kaguya';
                 const contextInfo = msg.message.extendedTextMessage?.contextInfo;
 
                 if (contextInfo && contextInfo.quotedMessage) {
-                    const cleanWord = text.trim().toLowerCase();
+                    const cleanWord = msgText.trim().toLowerCase();
                     if (rpActions[cleanWord]) {
-                        // Достаем текст того сообщения, на которое сделали реплай (там содержится ник/текст)
-                        const quotedMsgObj = contextInfo.quotedMessage;
-                        const quotedText = quotedMsgObj?.conversation || quotedMsgObj?.extendedTextMessage?.text || '';
+                        const quotedId = contextInfo.stanzaId;
+                        const cachedMsg = messageStore.get(quotedId) || {};
 
-                        const participantJid = contextInfo.participant || remoteJid;
-                        let targetName = 'участника';
+                        const participantJid = cachedMsg.participant || contextInfo.participant || remoteJid;
+                        const quotedText = cachedMsg.text || '';
+                        let targetName = cachedMsg.pushName || 'участника';
 
                         try {
                             const resolvedName = await sock.getName(participantJid);
@@ -133,7 +150,7 @@ async function startBot() {
                     }
                 }
 
-                const replyResult = handleIncomingMessage(text);
+                const replyResult = handleIncomingMessage(msgText);
 
                 if (replyResult) {
                     if (typeof replyResult === 'object' && replyResult.type === 'ai') {
