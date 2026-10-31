@@ -17,6 +17,9 @@ http.createServer((req, res) => {
     res.end('OK');
 }).listen(PORT);
 
+// Кеш для сохранения имен участников из чата
+const userNamesCache = new Map();
+
 async function startBot() {
     if (!config.databaseUrl) return;
 
@@ -93,7 +96,7 @@ async function startBot() {
             if (m.type !== 'notify') return;
 
             for (const msg of m.messages) {
-                if (!msg.message || msg.key.fromMe) continue;
+                if (!msg.message) continue;
 
                 const remoteJid = msg.key.remoteJid;
                 if (!remoteJid) continue;
@@ -101,6 +104,14 @@ async function startBot() {
                 if (remoteJid.endsWith('@g.us')) {
                     activeGroups.add(remoteJid);
                 }
+
+                // Запоминаем имя отправителя в кеш
+                const senderJid = msg.key.participant || remoteJid;
+                if (senderJid && msg.pushName) {
+                    userNamesCache.set(senderJid, msg.pushName);
+                }
+
+                if (msg.key.fromMe) continue;
 
                 const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
                 if (!text) continue;
@@ -111,13 +122,15 @@ async function startBot() {
                 if (contextInfo && contextInfo.quotedMessage) {
                     const cleanWord = text.trim().toLowerCase();
                     if (rpActions[cleanWord]) {
-                        let fallbackName = 'участника';
+                        const quotedParticipant = contextInfo.participant || remoteJid;
+                        let targetName = userNamesCache.get(quotedParticipant) || 'участника';
+
                         try {
-                            const resolvedName = await sock.getName(contextInfo.participant);
-                            if (resolvedName) fallbackName = resolvedName;
+                            const resolvedName = await sock.getName(quotedParticipant);
+                            if (resolvedName) targetName = resolvedName;
                         } catch (e) {}
 
-                        const rpResult = processRp(cleanWord, senderName, contextInfo, fallbackName);
+                        const rpResult = processRp(cleanWord, senderName, quotedParticipant, targetName);
                         if (rpResult) {
                             await sock.sendMessage(remoteJid, { text: rpResult }, { quoted: msg });
                             continue;
