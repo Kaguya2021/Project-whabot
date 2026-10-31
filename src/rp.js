@@ -10,11 +10,19 @@ const rpActions = {
 
 function cleanAndDeclensionName(rawName) {
     if (!rawName) return 'участника';
-    let clean = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, '').trim();
+    let clean = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s@]/g, '').trim();
     if (!clean) clean = rawName;
 
     const lower = clean.toLowerCase();
     const map = {
+        // Клички из контактов / чата
+        'мбанк': 'Эмира',
+        'mbank': 'Эмира',
+        'палчик': 'Байела',
+        'барсик': 'Барсбека',
+        'barsik': 'Барсбека',
+
+        // Имена и вариации
         'feruza': 'Ферузу',
         'феруза': 'Ферузу',
         'b@rsbek': 'Барсбека',
