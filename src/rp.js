@@ -8,7 +8,6 @@ const rpActions = {
     'слить': 'эпично слил(-а)'
 };
 
-// Жесткая база номеров учеников 9-В для 100% точного определения
 const phoneToName = {
     '707664465': 'Ферузу',
     '707398640': 'Барсбека',
@@ -41,17 +40,9 @@ const phoneToName = {
     '556214091': 'Kaguya'
 };
 
-function resolveTargetName(contextInfo, rawName) {
-    // Собираем все возможные строки, где может быть номер или JID
-    const searchStrings = [
-        contextInfo?.participant,
-        contextInfo?.remoteJid,
-        contextInfo?.stanzaId,
-        rawName
-    ].filter(Boolean);
-
-    for (const str of searchStrings) {
-        const cleanNum = String(str).replace(/[^0-9]/g, '');
+function resolveTargetName(participantJid, rawName) {
+    if (participantJid) {
+        const cleanNum = String(participantJid).replace(/[^0-9]/g, '');
         for (const [phone, name] of Object.entries(phoneToName)) {
             if (cleanNum.includes(phone)) {
                 return name;
@@ -59,10 +50,16 @@ function resolveTargetName(contextInfo, rawName) {
         }
     }
 
-    // Если по номеру не нашли, проверяем текстовые ники/клички
-    if (rawName) {
-        let clean = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s@]/g, '').trim();
-        const lower = clean.toLowerCase();
+    const checkStrings = [rawName].filter(Boolean);
+    for (let str of checkStrings) {
+        const cleanNum = String(str).replace(/[^0-9]/g, '');
+        for (const [phone, name] of Object.entries(phoneToName)) {
+            if (cleanNum.includes(phone)) {
+                return name;
+            }
+        }
+
+        const lowerStr = str.toLowerCase();
 
         const map = {
             'мбанк': 'Эмира',
@@ -80,22 +77,30 @@ function resolveTargetName(contextInfo, rawName) {
             'эмир': 'Эмира'
         };
 
-        if (map[lower]) return map[lower];
-        if (clean) return clean;
+        for (const [key, name] of Object.entries(map)) {
+            if (lowerStr.includes(key)) {
+                return name;
+            }
+        }
+
+        let clean = str.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, '').trim();
+        if (clean && clean !== 'участника') {
+            return clean;
+        }
     }
 
     return 'участника';
 }
 
-function processRp(text, senderName, contextInfo, rawName) {
+function processRp(text, senderName, participantJid, rawName) {
     const cleanText = text.trim().toLowerCase();
     if (!rpActions[cleanText]) return null;
 
     const actionText = rpActions[cleanText];
     const senderClean = 'Kaguya';
-    const targetClean = resolveTargetName(contextInfo, rawName);
+    const targetClean = resolveTargetName(participantJid, rawName);
 
-    return `✨ *${senderClean}* ${actionText} *${targetClean}*!`;
+    return `*${senderClean}* ${actionText} *${targetClean}*! :)`;
 }
 
 module.exports = { rpActions, processRp };
