@@ -41,17 +41,9 @@ const phoneToName = {
 };
 
 function resolveTargetName(participantJid, rawName) {
-    if (participantJid) {
-        const cleanNum = String(participantJid).replace(/[^0-9]/g, '');
-        for (const [phone, name] of Object.entries(phoneToName)) {
-            if (cleanNum.includes(phone)) {
-                return name;
-            }
-        }
-    }
+    const searchStrings = [participantJid, rawName].filter(Boolean);
 
-    const checkStrings = [rawName].filter(Boolean);
-    for (let str of checkStrings) {
+    for (const str of searchStrings) {
         const cleanNum = String(str).replace(/[^0-9]/g, '');
         for (const [phone, name] of Object.entries(phoneToName)) {
             if (cleanNum.includes(phone)) {
@@ -59,8 +51,7 @@ function resolveTargetName(participantJid, rawName) {
             }
         }
 
-        const lowerStr = str.toLowerCase();
-
+        const lowerStr = String(str).toLowerCase();
         const map = {
             'мбанк': 'Эмира',
             'mbank': 'Эмира',
@@ -82,11 +73,11 @@ function resolveTargetName(participantJid, rawName) {
                 return name;
             }
         }
+    }
 
-        let clean = str.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, '').trim();
-        if (clean && clean !== 'участника') {
-            return clean;
-        }
+    if (rawName && rawName !== 'участника') {
+        let clean = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, '').trim();
+        if (clean) return clean;
     }
 
     return 'участника';
