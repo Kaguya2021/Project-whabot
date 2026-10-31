@@ -9,7 +9,7 @@ function handleIncomingMessage(text) {
         return null;
     }
 
-    const parts = cleanText.split(' ');
+    const parts = cleanText.split(/\s+/);
     const command = parts[0].toLowerCase();
     const targetParam = parts.slice(1).join(' ');
 
@@ -39,17 +39,17 @@ function handleIncomingMessage(text) {
             return `╭━━━━━━━━━━━━━━━━━━━━╮\n` +
                    `✦ 𝐂𝐑𝐄𝐀𝐓𝐎𝐑 𝐈𝐍𝐅𝐎 ✦\n` +
                    `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-                   `👑 **Создатель:** Kaguya\n` +
-                   `💻 **Разработчик:** Kaguya\n` +
-                   `⚡ **Автор проекта:** Kaguya\n\n` +
+                   `👑 *Создатель:* Kaguya\n` +
+                   `💻 *Разработчик:* Kaguya\n` +
+                   `⚡ *Автор проекта:* Kaguya\n\n` +
                    `╭─────── SOCIAL MEDIA ───────╮\n\n` +
-                   `✈️ **Telegram:** @kaguya2_0\n` +
+                   `✈️ *Telegram:* @kaguya2_0\n` +
                    `🔗 https://t.me/kaguya2_0\n\n` +
-                   `💬 **WhatsApp:** Связаться со мной\n` +
+                   `💬 *WhatsApp:* Связаться со мной\n` +
                    `🔗 https://wa.me/996700214091\n\n` +
                    `╰──────────────────────────╯\n\n` +
                    `🛠️ Разработка • Обновления • Новые проекты\n\n` +
-                   `♥️ С любовью, **Kaguya**\n` +
+                   `♥️ С любовью, *Kaguya*\n` +
                    `╰━━━━━━━━━━━━━━━━━━━━╯`;
 
         case '/помощь':
@@ -63,13 +63,16 @@ function handleIncomingMessage(text) {
                    `/расписание — меню расписания\n` +
                    `/люди — список учеников\n` +
                    `/создатель — информация об авторе\n` +
+                   `/ai [текст] — вопрос ИИ\n` +
+                   `/grr [имя] — поздравление с ДР\n` +
+                   `/banana, /news, /palc, /baran — развлечения\n` +
                    `/помощь — список команд`;
 
         case '/panel':
             return `🎛️ Секретная панель управления:\n\n` +
                    `/понедельник\n/вторник\n/среда\n/четверг\n/пятница\n` +
                    `/расписание\n/люди\n/создатель\n/ai [текст]\n/grr [Имя]\n` +
-                   `/banana\n/news\n/palc\n/baran`;
+                   `/banana\n/news\n/palc\n/baran\n/помощь`;
 
         case '/ai':
             return { type: 'ai', query: targetParam };
