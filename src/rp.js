@@ -41,47 +41,59 @@ const phoneToName = {
     '556214091': 'Kaguya'
 };
 
-function resolveTargetName(participantJid, rawName) {
-    if (participantJid) {
-        const cleanJidNum = participantJid.replace(/[^0-9]/g, '');
+function resolveTargetName(contextInfo, rawName) {
+    // Собираем все возможные строки, где может быть номер или JID
+    const searchStrings = [
+        contextInfo?.participant,
+        contextInfo?.remoteJid,
+        contextInfo?.stanzaId,
+        rawName
+    ].filter(Boolean);
+
+    for (const str of searchStrings) {
+        const cleanNum = String(str).replace(/[^0-9]/g, '');
         for (const [phone, name] of Object.entries(phoneToName)) {
-            if (cleanJidNum.endsWith(phone)) {
+            if (cleanNum.includes(phone)) {
                 return name;
             }
         }
     }
 
-    if (!rawName) return 'участника';
-    let clean = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s@]/g, '').trim();
-    const lower = clean.toLowerCase();
+    // Если по номеру не нашли, проверяем текстовые ники/клички
+    if (rawName) {
+        let clean = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s@]/g, '').trim();
+        const lower = clean.toLowerCase();
 
-    const map = {
-        'мбанк': 'Эмира',
-        'mbank': 'Эмира',
-        'палчик': 'Байела',
-        'барсик': 'Барсбека',
-        'barsik': 'Барсбека',
-        'feruza': 'Ферузу',
-        'феруза': 'Ферузу',
-        'b@rsbek': 'Барсбека',
-        'барсбек': 'Барсбека',
-        'байел': 'Байела',
-        'адинай': 'Адинай',
-        'adinaй': 'Адинай',
-        'эмир': 'Эмира'
-    };
+        const map = {
+            'мбанк': 'Эмира',
+            'mbank': 'Эмира',
+            'палчик': 'Байела',
+            'барсик': 'Барсбека',
+            'barsik': 'Барсбека',
+            'feruza': 'Ферузу',
+            'феруза': 'Ферузу',
+            'b@rsbek': 'Барсбека',
+            'барсбек': 'Барсбека',
+            'байел': 'Байела',
+            'адинай': 'Адинай',
+            'adinaй': 'Адинай',
+            'эмир': 'Эмира'
+        };
 
-    if (map[lower]) return map[lower];
-    return clean;
+        if (map[lower]) return map[lower];
+        if (clean) return clean;
+    }
+
+    return 'участника';
 }
 
-function processRp(text, senderName, participantJid, rawName) {
+function processRp(text, senderName, contextInfo, rawName) {
     const cleanText = text.trim().toLowerCase();
     if (!rpActions[cleanText]) return null;
 
     const actionText = rpActions[cleanText];
     const senderClean = 'Kaguya';
-    const targetClean = resolveTargetName(participantJid, rawName);
+    const targetClean = resolveTargetName(contextInfo, rawName);
 
     return `✨ *${senderClean}* ${actionText} *${targetClean}*!`;
 }
