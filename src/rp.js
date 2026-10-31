@@ -65,6 +65,8 @@ function resolveTargetName(participantJid, quotedText, rawName) {
             'b@rsbek': 'Барсбека',
             'барсбек': 'Барсбека',
             'байел': 'Байела',
+            'надиха': 'Надиху',
+            'надих': 'Надиху',
             'адинай': 'Адинай',
             'adinaй': 'Адинай',
             'эмир': 'Эмира',
@@ -87,7 +89,13 @@ function resolveTargetName(participantJid, quotedText, rawName) {
 
     if (rawName && rawName !== 'участника') {
         let clean = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, '').trim();
-        if (clean) return clean;
+        if (clean) {
+            // Авто-падеж если нет в словаре
+            if (/[ая]$/i.test(clean)) {
+                return clean.replace(/[ая]$/i, m => m.toLowerCase() === 'а' ? 'у' : 'ю');
+            }
+            return clean;
+        }
     }
 
     return 'участника';
