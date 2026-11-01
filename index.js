@@ -14,7 +14,8 @@ const { handleIncomingMessage } = require('./src/bot');
 const { getCurrentTimeString, getCurrentDateString, getCurrentYearString } = require('./src/schedule');
 const { checkBirthdayByDate, buildBirthdayMessages } = require('./src/people');
 const { getAIResponse } = require('./src/ai');
-const { processRp, rpActions } = require('./src/rp');
+const { processRp, rpActions, personKeyFromJids, nameByJid } = require('./src/rp');
+const { createRelations, RELATION_WORDS, ACCEPT_WORDS, DECLINE_WORDS, isRelationCommand } = require('./src/relations');
 
 // ---------- защита от падений ----------
 process.on('unhandledRejection', (reason) => console.error('[unhandledRejection]', reason));
@@ -32,6 +33,11 @@ const messageStore = new Map();          // id сообщения -> кто на
 const groupMetaCache = new Map();        // jid группы -> { t, data }
 const GROUP_META_TTL = 10 * 60 * 1000;
 const activeGroups = new Set(config.groupJids);
+
+const relations = createRelations({
+    load: () => getState(config.databaseUrl, 'relations'),
+    save: (value) => setState(config.databaseUrl, 'relations', value)
+});
 
 let sock = null;
 let connected = false;
@@ -92,16 +98,12 @@ async function refreshGroups(s) {
     }
 }
 
-// Собираем ВСЕ возможные идентификаторы автора цитируемого сообщения (в т.ч. номер за @lid),
-// чтобы потом найти его номер в таблице из rp.js.
-async function resolveRpTarget(s, remoteJid, ctx) {
-    const cached = messageStore.get(ctx.stanzaId) || {};
+// Собираем ВСЕ возможные идентификаторы человека (в т.ч. номер за @lid),
+// чтобы потом найти его номер в таблице из rp.js и получить постоянный ключ.
+async function expandJids(s, remoteJid, initial) {
     const jids = new Set();
     const add = (v) => { if (typeof v === 'string' && v.includes('@')) jids.add(normJid(v)); };
-
-    add(cached.participant);
-    add(cached.participantAlt);
-    add(ctx.participant);
+    initial.forEach(add);
 
     if (remoteJid.endsWith('@g.us')) {
         const meta = await getGroupMeta(s, remoteJid);
@@ -122,7 +124,30 @@ async function resolveRpTarget(s, remoteJid, ctx) {
         } catch (e) { /* не поддерживается этой версией — не страшно */ }
     }
 
-    return { jids: [...jids], pushName: cached.pushName || '' };
+    return [...jids];
+}
+
+// Кому адресовано RP/предложение (автор цитируемого сообщения)
+async function resolveRpTarget(s, remoteJid, ctx) {
+    const cached = messageStore.get(ctx.stanzaId) || {};
+    const jids = await expandJids(s, remoteJid, [cached.participant, cached.participantAlt, ctx.participant]);
+    return { jids, pushName: cached.pushName || '' };
+}
+
+function nameFromJids(jids) {
+    for (const jid of jids) {
+        const n = nameByJid(jid);
+        if (n) return n;
+    }
+    return '';
+}
+
+// Кто написал сообщение: { key, name }
+async function resolveSender(s, msg, remoteJid) {
+    const initial = [msg.key.participant, msg.key.participantAlt, msg.key.participantPn, msg.key.senderPn];
+    if (!remoteJid.endsWith('@g.us')) initial.push(remoteJid);
+    const jids = await expandJids(s, remoteJid, initial);
+    return { key: personKeyFromJids(jids), name: msg.pushName || nameFromJids(jids) || '' };
 }
 
 async function broadcastToGroups(texts) {
@@ -229,6 +254,44 @@ async function handleMessage(s, msg) {
                 await s.sendMessage(remoteJid, { text: rpResult }, { quoted: msg });
                 return;
             }
+        }
+    }
+
+    // ---------- отношения ----------
+    const lowerText = msgText.trim().toLowerCase();
+
+    // Ответом на сообщение: «подружиться» / «встречаться» / «пожениться»
+    if (ctx && ctx.quotedMessage && Object.hasOwn(RELATION_WORDS, lowerText)) {
+        const targetInfo = await resolveRpTarget(s, remoteJid, ctx);
+        const sender = await resolveSender(s, msg, remoteJid);
+        const target = {
+            key: personKeyFromJids(targetInfo.jids),
+            name: targetInfo.pushName || nameFromJids(targetInfo.jids)
+        };
+        const text = await relations.propose(RELATION_WORDS[lowerText], sender, target);
+        await s.sendMessage(remoteJid, { text }, { quoted: msg });
+        return;
+    }
+
+    // Ответ на предложение: «принять» / «отказаться»
+    const isAccept = ACCEPT_WORDS.has(lowerText);
+    const isDecline = DECLINE_WORDS.has(lowerText);
+    if (isAccept || isDecline) {
+        const sender = await resolveSender(s, msg, remoteJid);
+        const text = await relations.respond(sender, isAccept);
+        if (text) {
+            await s.sendMessage(remoteJid, { text }, { quoted: msg });
+            return;
+        }
+    }
+
+    // Команды: /пара /пары /расстаться /развод /пол
+    if (isRelationCommand(msgText)) {
+        const sender = await resolveSender(s, msg, remoteJid);
+        const text = await relations.handleCommand(msgText, sender);
+        if (text) {
+            await s.sendMessage(remoteJid, { text }, { quoted: msg });
+            return;
         }
     }
 
