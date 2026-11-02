@@ -1,5 +1,6 @@
 const { formatDaySchedule, getFullScheduleMenu } = require('./schedule');
 const { getPeopleList, getBirthdayList, getBirthdayGreeting } = require('./people');
+const { INTRO: AI_INTRO } = require('./ai');
 const { getBananaResponse, getNewsResponse, getPalcResponse, getRandomBaranFact } = require('./fun');
 
 function handleIncomingMessage(text) {
@@ -83,6 +84,7 @@ function handleIncomingMessage(text) {
                    `/banana\n/news\n/palc\n/baran\n/помощь`;
 
         case '/ai':
+            if (!targetParam) return AI_INTRO;
             return { type: 'ai', query: targetParam };
 
         case '/grr':
