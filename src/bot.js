@@ -1,5 +1,5 @@
 const { formatDaySchedule, getFullScheduleMenu } = require('./schedule');
-const { getPeopleList, getBirthdayGreeting } = require('./people');
+const { getPeopleList, getBirthdayList, getBirthdayGreeting } = require('./people');
 const { getBananaResponse, getNewsResponse, getPalcResponse, getRandomBaranFact } = require('./fun');
 
 function handleIncomingMessage(text) {
@@ -35,6 +35,9 @@ function handleIncomingMessage(text) {
         case '/люди':
             return getPeopleList();
 
+        case '/dr':
+            return getBirthdayList();
+
         case '/создатель':
             return `╭━━━━━━━━━━━━━━━━━━━━╮\n` +
                    `✦ 𝐂𝐑𝐄𝐀𝐓𝐎𝐑 𝐈𝐍𝐅𝐎 ✦\n` +
@@ -62,6 +65,7 @@ function handleIncomingMessage(text) {
                    `/пятница — расписание пятницы\n` +
                    `/расписание — меню расписания\n` +
                    `/люди — список учеников\n` +
+                   `/dr — дни рождения класса\n` +
                    `/создатель — информация об авторе\n` +
                    `/пара — твой профиль и отношения\n` +
                    `/пары — все пары класса\n` +
@@ -75,7 +79,7 @@ function handleIncomingMessage(text) {
         case '/panel':
             return `🎛️ Секретная панель управления:\n\n` +
                    `/понедельник\n/вторник\n/среда\n/четверг\n/пятница\n` +
-                   `/расписание\n/люди\n/создатель\n/ai [текст]\n/grr [Имя]\n` +
+                   `/расписание\n/люди\n/dr\n/создатель\n/ai [текст]\n/grr [Имя]\n` +
                    `/banana\n/news\n/palc\n/baran\n/помощь`;
 
         case '/ai':
