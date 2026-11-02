@@ -3,6 +3,17 @@ const { getPeopleList, getBirthdayList, getBirthdayGreeting } = require('./peopl
 const { INTRO: AI_INTRO } = require('./ai');
 const { getBananaResponse, getNewsResponse, getPalcResponse, getRandomBaranFact } = require('./fun');
 
+// Вопрос про создателя бота («кто тебя создал?») — отвечаем готовым текстом, без обращения к ИИ.
+// Нужны сразу три признака: «кто», глагол создания и обращение к боту,
+// чтобы вопросы вроде «кто написал Манас?» уходили в ИИ как обычно.
+function isCreatorQuestion(query) {
+    const q = query.toLowerCase();
+    const who = /(кто|кем|чей|who)/.test(q);
+    const made = /(создал|создан|сделал|сделан|разработал|разработан|написал|написан|придумал|создател|разработчик|creat|made|built|develop)/.test(q);
+    const aboutBot = /(тебя|тебе|тобой|ты|твой|твоя|твои|бота|вас|kaguya|кагуя|кагуйя|\byou\b)/.test(q);
+    return who && made && aboutBot;
+}
+
 function handleIncomingMessage(text) {
     const cleanText = text.trim();
 
@@ -84,7 +95,7 @@ function handleIncomingMessage(text) {
                    `/banana\n/news\n/palc\n/baran\n/помощь`;
 
         case '/ai':
-            if (!targetParam) return AI_INTRO;
+            if (!targetParam || isCreatorQuestion(targetParam)) return AI_INTRO;
             return { type: 'ai', query: targetParam };
 
         case '/grr':
