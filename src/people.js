@@ -43,6 +43,13 @@ function getPeopleList() {
     return response.trim();
 }
 
+// Список дней рождения: «1. Фамилия Имя-ДД.ММ»
+function getBirthdayList() {
+    return studentsBirthdays
+        .map((st, index) => `${index + 1}. ${st.fullName}-${st.date}`)
+        .join('\n');
+}
+
 function buildBirthdayMessages(person) {
     return [
         `🎉 ${person.name}, с днём рождения! Желаем море позитива, океан счастья и ярких моментов. Пусть всё задуманное обязательно сбудется! ✨`,
@@ -80,4 +87,4 @@ function checkBirthdayByDate(dateStr) {
     return studentsBirthdays.filter(st => st.date === dateStr);
 }
 
-module.exports = { getPeopleList, getBirthdayGreeting, buildBirthdayMessages, checkBirthdayByDate, studentsBirthdays };
+module.exports = { getPeopleList, getBirthdayList, getBirthdayGreeting, buildBirthdayMessages, checkBirthdayByDate, studentsBirthdays };
