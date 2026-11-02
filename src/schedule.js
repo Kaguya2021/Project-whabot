@@ -1,5 +1,3 @@
-const config = require('./config');
-
 const scheduleData = {
     monday: {
         name: 'Понедельник',
@@ -62,7 +60,7 @@ function formatDaySchedule(dayKey) {
     const day = scheduleData[dayKey];
     if (!day) return 'Расписание не найдено.';
 
-    let text = `📅 Расписание: ${day.name} (${config.schoolName}, ${config.className})\n\n`;
+    let text = `📅 Расписание: ${day.name}\n\n`;
     day.lessons.forEach((l, index) => {
         text += `${index + 1}. ${l.timeStart} - ${l.timeEnd} | *${l.subject}*\n`;
     });
