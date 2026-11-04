@@ -68,7 +68,8 @@ const phoneToName = {
     '996709717643': 'Саиду', '709717643': 'Саиду',
     '996509123247': 'Чынгыза', '509123247': 'Чынгыза',
     '996226035271': 'Байела', '226035271': 'Байела',
-    '996556214091': 'Kaguya', '556214091': 'Kaguya'
+    '996556214091': 'Умара', '556214091': 'Умара',
+    '996700214091': 'Умара', '700214091': 'Умара'
 };
 
 // Индекс: последние 9 цифр номера -> имя (в винительном падеже).
@@ -171,12 +172,46 @@ function buildAction(actionText, targetName) {
     return actionText.replace(/\{(acc|dat|ins)\}/g, (_, kase) => `*${inflect(targetName, kase)}*`);
 }
 
-function processRp(text, target) {
+// Именительный падеж для тех, кто пишет (в таблице имена в винительном).
+const nominative = {
+    'Ферузу': 'Феруза', 'Барсбека': 'Барсбек', 'Айбике': 'Айбике', 'Айдану': 'Айдана',
+    'Айдеми': 'Айдеми', 'Айзирек': 'Айзирек', 'Баямана': 'Баяман', 'Гулсун': 'Гулсун',
+    'Динислама': 'Динислам', 'Жаныл': 'Жаныл', 'Куту': 'Куту', 'Эмира': 'Эмир',
+    'Надиху': 'Надиха', 'Нурислама': 'Нурислам', 'Байела': 'Байел', 'Раяну': 'Раяна',
+    'Сауле': 'Сауле', 'Сезим': 'Сезим', 'Тилекова': 'Тилеков', 'Альбину': 'Альбина',
+    'Элину': 'Элина', 'Амину': 'Амина', 'Адинай': 'Адинай', 'Саиду': 'Саида',
+    'Чынгыза': 'Чынгыз', 'Умара': 'Умар'
+};
+
+function toNominative(accName) {
+    return Object.hasOwn(nominative, accName) ? nominative[accName] : accName;
+}
+
+// Кто написал команду: по номеру -> по нику -> по имени из WhatsApp -> 'Kaguya'
+function resolveActorName(actor = {}) {
+    const jids = Array.isArray(actor.jids) ? actor.jids : [];
+    for (const jid of jids) {
+        const name = nameByJid(jid);
+        if (name) return toNominative(name);
+    }
+
+    const pushName = String(actor.pushName || '');
+    const tokens = pushName.toLowerCase().split(/[^\p{L}\p{N}@]+/u).filter(Boolean);
+    for (const token of tokens) {
+        if (Object.hasOwn(nicknameMap, token)) return toNominative(nicknameMap[token]);
+    }
+
+    const firstWord = pushName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, ' ').trim().split(/\s+/)[0];
+    return firstWord || 'Kaguya';
+}
+
+function processRp(text, target, actor) {
     const cleanText = String(text || '').trim().toLowerCase();
     if (!Object.hasOwn(rpActions, cleanText)) return null;
 
     const targetName = resolveTargetName(target);
-    return `*Kaguya* ${buildAction(rpActions[cleanText], targetName)}! :)`;
+    const actorName = actor ? resolveActorName(actor) : 'Kaguya';
+    return `*${actorName}* ${buildAction(rpActions[cleanText], targetName)}! :)`;
 }
 
 // Постоянный ключ человека: последние 9 цифр номера (если номер известен), иначе сам JID (@lid).
@@ -190,4 +225,4 @@ function personKeyFromJids(jids) {
     return first ? first.replace(/:\d+@/, '@') : null;
 }
 
-module.exports = { rpActions, processRp, resolveTargetName, personKeyFromJids, nameByJid };
+module.exports = { rpActions, processRp, resolveTargetName, resolveActorName, personKeyFromJids, nameByJid };
