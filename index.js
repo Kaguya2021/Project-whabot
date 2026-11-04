@@ -246,7 +246,15 @@ async function handleMessage(s, msg) {
         if (Object.hasOwn(rpActions, word)) {
             await delay(400);
             const target = await resolveRpTarget(s, remoteJid, ctx);
-            const rpResult = processRp(word, target);
+
+            // Кто написал команду — его имя встанет в начало фразы
+            const actorJids = await expandJids(s, remoteJid, [
+                msg.key.participant, msg.key.participantAlt, msg.key.participantPn, msg.key.senderPn,
+                ...(remoteJid.endsWith('@g.us') ? [] : [remoteJid])
+            ]);
+            const actor = { jids: actorJids, pushName: msg.pushName || '' };
+
+            const rpResult = processRp(word, target, actor);
             if (rpResult) {
                 if (rpResult.includes('*участника*')) {
                     console.log('[RP] номер не найден в rp.js:', JSON.stringify(target));
